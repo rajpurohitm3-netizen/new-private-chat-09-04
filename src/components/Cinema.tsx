@@ -17,19 +17,16 @@ import {
   X,
   Rewind,
   FastForward,
-  Music
 } from "lucide-react";
-import ReactPlayer from "react-player";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 
 interface CinemaProps {
   onClose?: () => void;
-  isMusicMode?: boolean;
 }
 
-export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
+export function Cinema({ onClose }: CinemaProps) {
   const [videoSource, setVideoSource] = useState<string>("");
   const [localFile, setLocalFile] = useState<File | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -42,39 +39,11 @@ export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
   const [urlInput, setUrlInput] = useState("");
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [isYoutube, setIsYoutube] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<ReactPlayer>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if ("mediaSession" in navigator && videoSource) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: isMusicMode ? "Solo Listen" : "Solo Watch",
-        artist: localFile?.name || "Chatify v2",
-        album: "Cinema Mode",
-        artwork: [
-          { src: "https://grainy-gradients.vercel.app/noise.svg", sizes: "512x512", type: "image/svg+xml" }
-        ]
-      });
-
-      navigator.mediaSession.setActionHandler("play", () => togglePlay());
-      navigator.mediaSession.setActionHandler("pause", () => togglePlay());
-      navigator.mediaSession.setActionHandler("seekbackward", () => skip(-10));
-      navigator.mediaSession.setActionHandler("seekforward", () => skip(10));
-    }
-  }, [videoSource, isMusicMode, localFile]);
-
-  useEffect(() => {
-    if (videoSource) {
-      setIsYoutube(ReactPlayer.canPlay(videoSource));
-    } else {
-      setIsYoutube(false);
-    }
-  }, [videoSource]);
 
   const hideControlsAfterDelay = useCallback(() => {
     if (controlsTimeout.current) {
@@ -121,9 +90,7 @@ export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
   };
 
   const togglePlay = () => {
-    if (isYoutube) {
-      setIsPlaying(!isPlaying);
-    } else if (videoRef.current) {
+    if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
       } else {
@@ -146,28 +113,24 @@ export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
   };
 
   const handleSeek = (value: number[]) => {
-    if (isYoutube) {
-      playerRef.current?.seekTo(value[0], "seconds");
-      setCurrentTime(value[0]);
-    } else if (videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.currentTime = value[0];
       setCurrentTime(value[0]);
     }
   };
 
   const handleVolumeChange = (value: number[]) => {
-    setVolume(value[0]);
-    setIsMuted(value[0] === 0);
     if (videoRef.current) {
       videoRef.current.volume = value[0];
+      setVolume(value[0]);
+      setIsMuted(value[0] === 0);
     }
   };
 
   const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
     if (videoRef.current) {
-      videoRef.current.muted = nextMuted;
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
     }
   };
 
@@ -183,10 +146,7 @@ export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
   };
 
   const skip = (seconds: number) => {
-    if (isYoutube) {
-      const nextTime = (playerRef.current?.getCurrentTime() || 0) + seconds;
-      playerRef.current?.seekTo(nextTime, "seconds");
-    } else if (videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.currentTime += seconds;
     }
   };
@@ -318,65 +278,17 @@ export function Cinema({ onClose, isMusicMode = false }: CinemaProps) {
             onMouseMove={showControls}
             onClick={() => !controlsVisible && showControls()}
           >
-            <div className="w-full h-full flex items-center justify-center bg-[#050505]">
-              <div className={isMusicMode ? "w-full max-w-2xl px-6" : "w-full h-full"}>
-                {isMusicMode && (
-                  <div className="flex flex-col items-center mb-12 space-y-8">
-                    <motion.div 
-                      animate={isPlaying ? { rotate: 360 } : {}}
-                      transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                      className="relative"
-                    >
-                      <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-full border-8 border-zinc-800 shadow-[0_0_50px_rgba(99,102,241,0.2)] bg-zinc-900 flex items-center justify-center relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-transparent to-purple-500/10" />
-                        <div className="w-full h-full flex items-center justify-center relative z-10 p-12">
-                           <Music className="w-full h-full text-indigo-500/30" />
-                        </div>
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.05]" />
-                      </div>
-                      <div className="absolute inset-0 rounded-full border border-white/5 pointer-events-none" />
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-black rounded-full border-2 border-zinc-800 z-20" />
-                    </motion.div>
-                    
-                    <div className="text-center space-y-2">
-                      <h3 className="text-3xl font-black uppercase italic tracking-tighter text-white">Solo Listen</h3>
-                      <p className="text-white/40 text-xs font-bold uppercase tracking-widest truncate max-w-[300px]">
-                        {localFile?.name || urlInput || "Your Track"}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                
-                {isYoutube ? (
-                  <div className={isMusicMode ? "opacity-0 absolute pointer-events-none" : "w-full h-full"}>
-                    <ReactPlayer
-                      ref={playerRef}
-                      url={videoSource}
-                      playing={isPlaying}
-                      volume={volume}
-                      width="100%"
-                      height={isMusicMode ? "0px" : "100%"}
-                      onProgress={(p) => setCurrentTime(p.playedSeconds)}
-                      onDuration={(d) => setDuration(d)}
-                      playsinline
-                    />
-                  </div>
-                ) : (
-                  <video
-                    ref={videoRef}
-                    src={videoSource}
-                    className={isMusicMode ? "hidden" : "flex-1 w-full object-contain bg-black"}
-                    onTimeUpdate={handleTimeUpdate}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onEnded={() => setIsPlaying(false)}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onClick={togglePlay}
-                    playsInline
-                  />
-                )}
-              </div>
-            </div>
+            <video
+              ref={videoRef}
+              src={videoSource}
+              className="flex-1 w-full object-contain bg-black"
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={() => setIsPlaying(false)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onClick={togglePlay}
+            />
 
             <AnimatePresence>
               {controlsVisible && (
