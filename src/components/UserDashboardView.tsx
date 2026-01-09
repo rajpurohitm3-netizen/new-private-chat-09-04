@@ -72,9 +72,11 @@ function formatNotificationTime(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function UserDashboardView({ session, privateKey }: UserDashboardViewProps) {
-  const router = useRouter();
-  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  export function UserDashboardView({ session, privateKey }: UserDashboardViewProps) {
+    const router = useRouter();
+    const isMounted = useRef(true);
+    const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+
   const [isChatUnlocked, setIsChatUnlocked] = useState(false);
   const [myProfile, setMyProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -106,7 +108,15 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
   const notificationSound = useRef<HTMLAudioElement | null>(null);
   const presenceChannelRef = useRef<any>(null);
 
-  async function clearAllChats() {
+    useEffect(() => {
+      isMounted.current = true;
+      return () => {
+        isMounted.current = false;
+      };
+    }, []);
+
+    async function clearAllChats() {
+
     setShowClearConfirm(true);
     setShowMoreMenu(false);
   }
@@ -414,6 +424,7 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
 
   function setupRealtimeSubscriptions() {
     const broadcastsChannel = supabase.channel("global-broadcasts").on("postgres_changes", { event: "INSERT", schema: "public", table: "broadcasts" }, (payload) => {
+      if (!isMounted.current) return;
       setBroadcasts([payload.new]);
       toast.info("Global Broadcast Received", { description: payload.new.content });
       showNotification("Global Broadcast", { body: payload.new.content });
@@ -421,6 +432,7 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     }).subscribe();
 
     const messagesChannel = supabase.channel("dashboard-messages").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${session.user.id}` }, async (payload) => {
+      if (!isMounted.current) return;
       fetchRecentChats();
       fetchUnreadCount();
       const { data: sender } = await supabase.from("profiles").select("username").eq("id", payload.new.sender_id).single();
@@ -430,10 +442,11 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     }).subscribe();
 
     const callsChannel = supabase.channel("incoming-calls").on("postgres_changes", { event: "INSERT", schema: "public", table: "calls", filter: `receiver_id=eq.${session.user.id}` }, async (payload) => {
+      if (!isMounted.current) return;
       const data = payload.new;
       if (data.type === "offer" && !activeCall && !incomingCall) {
         const { data: caller } = await supabase.from("profiles").select("*").eq("id", data.caller_id).single();
-        if (caller) {
+        if (caller && isMounted.current) {
           setIncomingCall({ ...data, caller });
           toast.info(`Incoming ${data.call_mode} call from ${caller.username}`, { duration: 10000 });
           showNotification(`Incoming ${data.call_mode} call`, { body: `Call from ${caller.username}` });
@@ -443,9 +456,10 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     }).subscribe();
 
     const storiesChannel = supabase.channel("new-stories").on("postgres_changes", { event: "INSERT", schema: "public", table: "stories" }, async (payload) => {
+      if (!isMounted.current) return;
       if (payload.new.user_id !== session.user.id) {
         const { data: creator } = await supabase.from("profiles").select("username").eq("id", payload.new.user_id).single();
-        if (creator) {
+        if (creator && isMounted.current) {
           toast.info(`New story from ${creator.username}`);
           showNotification("New Story", { body: `${creator.username} shared a new snapshot.` });
           addNotification("story", "New Story", `${creator.username} shared a new story`, { userId: payload.new.user_id });
@@ -454,12 +468,13 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     }).subscribe();
 
     const friendRequestsChannel = supabase.channel("friend-requests-notifications").on("postgres_changes", { event: "*", schema: "public", table: "friend_requests" }, async (payload) => {
+      if (!isMounted.current) return;
       fetchPendingFriendRequests();
       fetchFriends();
       fetchFriendRequests();
       if (payload.eventType === "INSERT" && payload.new.receiver_id === session.user.id) {
         const { data: sender } = await supabase.from("profiles").select("username").eq("id", payload.new.sender_id).single();
-        if (sender) {
+        if (sender && isMounted.current) {
           toast.info(`${sender.username} sent you a friend request`);
           showNotification("Friend Request", { body: `${sender.username} wants to connect with you` });
           addNotification("friend_request", "Friend Request", `${sender.username} wants to be your friend`, { senderId: payload.new.sender_id });
@@ -468,6 +483,7 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     }).subscribe();
 
     const presenceChannel = supabase.channel("online-users").on("presence", { event: "sync" }, () => {
+      if (!isMounted.current) return;
       const state = presenceChannel.presenceState();
       const online = new Set<string>();
       Object.values(state).forEach((users: any) => { users.forEach((u: any) => online.add(u.user_id)); });
