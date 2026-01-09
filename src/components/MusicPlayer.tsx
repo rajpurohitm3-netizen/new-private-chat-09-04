@@ -13,11 +13,10 @@ import {
   Link,
   Music,
   X,
-  Disc,
   ListMusic,
   Heart,
-  Shuffle,
   Repeat,
+  Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +36,8 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
   const [urlInput, setUrlInput] = useState("");
-  const [isLiked, setIsLiked] = useState(false);
+  const [isRepeat, setIsRepeat] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,23 +132,24 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
   }, [localFile, audioSource]);
 
   return (
-    <div className="h-full flex flex-col bg-[#030303]">
+    <div className="h-full flex flex-col bg-[#050505]">
       <AnimatePresence mode="wait">
         {showSetup ? (
           <motion.div
             key="setup"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex-1 flex flex-col items-center justify-center p-6"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+            className="flex-1 flex flex-col items-center justify-center p-8"
           >
-            <div className="w-full max-w-md space-y-8">
-              <div className="text-center space-y-2">
-                <div className="w-24 h-24 mx-auto bg-gradient-to-br from-pink-600 to-rose-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(225,29,72,0.3)] animate-pulse">
-                  <Music className="w-12 h-12 text-white" />
+            <div className="w-full max-w-md space-y-10">
+              <div className="text-center space-y-4">
+                <div className="w-24 h-24 mx-auto bg-gradient-to-br from-indigo-500 via-blue-500 to-purple-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-indigo-500/20 relative group">
+                  <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full group-hover:blur-3xl transition-all" />
+                  <Music className="w-10 h-10 text-white relative" />
                 </div>
-                <h2 className="text-4xl font-black uppercase italic tracking-tighter">Music Solo</h2>
-                <p className="text-sm text-white/30 tracking-widest uppercase">Immerse yourself in sound</p>
+                <h2 className="text-4xl font-black uppercase italic tracking-tighter">Music <span className="text-indigo-500">Solo</span></h2>
+                <p className="text-xs text-white/30 font-black uppercase tracking-[0.3em]">Pure Auditory Experience</p>
               </div>
 
               <div className="space-y-4">
@@ -161,35 +162,35 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
                 />
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-16 bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] hover:border-pink-500/50 rounded-2xl text-white font-bold uppercase tracking-[0.2em] transition-all group"
+                  className="w-full h-20 bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-indigo-500/50 rounded-[2rem] text-white font-black uppercase tracking-widest transition-all group"
                 >
-                  <Upload className="w-5 h-5 mr-3 group-hover:text-pink-500 transition-colors" />
-                  Upload Track
+                  <Upload className="w-5 h-5 mr-3 text-indigo-400 group-hover:scale-110 transition-transform" />
+                  Upload Local Audio
                 </Button>
 
-                <div className="relative flex items-center gap-3 py-4">
+                <div className="relative flex items-center gap-4 py-4">
                   <div className="flex-1 h-px bg-white/5" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/10">Matrix Stream</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20">OR</span>
                   <div className="flex-1 h-px bg-white/5" />
                 </div>
 
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Link className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                <div className="space-y-4">
+                  <div className="relative group">
+                    <Link className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
                     <Input
                       value={urlInput}
                       onChange={(e) => setUrlInput(e.target.value)}
-                      placeholder="Paste audio URL (MP3, FLAC, WAV)..."
-                      className="h-14 bg-white/[0.02] border-white/10 rounded-2xl pl-12 text-white placeholder:text-white/20 focus:border-pink-500/50 transition-all"
+                      placeholder="STREAM URL (MP3, WAV, etc.)"
+                      className="h-16 bg-white/[0.03] border-white/10 rounded-[1.5rem] pl-14 text-sm font-bold tracking-wider focus:border-indigo-500/50 transition-all"
                       onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
                     />
                   </div>
                   <Button
                     onClick={handleUrlSubmit}
                     disabled={!urlInput.trim()}
-                    className="w-full h-12 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 rounded-xl font-black uppercase tracking-widest disabled:opacity-30 transition-all"
+                    className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 disabled:opacity-30 transition-all active:scale-95"
                   >
-                    Initialize Stream
+                    Load Stream
                   </Button>
                 </div>
               </div>
@@ -200,95 +201,149 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
             key="player"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col p-6 sm:p-12 relative overflow-hidden"
+            className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden"
           >
-            <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-pink-600/10 blur-[200px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] bg-rose-600/10 blur-[200px] rounded-full pointer-events-none" />
-
-            <div className="flex items-center justify-between mb-12 relative z-10">
-              <Button variant="ghost" onClick={resetPlayer} className="text-white/30 hover:text-white hover:bg-white/5 rounded-2xl px-6 h-12">
-                <X className="w-5 h-5 mr-2" /> <span className="text-xs font-black uppercase tracking-widest">Eject</span>
-              </Button>
-              <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full">
-                <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Processing Signal</span>
-              </div>
-              <Button variant="ghost" size="icon" className="text-white/30 hover:text-white"><ListMusic className="w-6 h-6" /></Button>
+            {/* Background Visualizer Effect */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <motion.div 
+                    animate={{ 
+                        scale: isPlaying ? [1, 1.2, 1] : 1,
+                        opacity: isPlaying ? [0.1, 0.2, 0.1] : 0.1
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/20 blur-[120px] rounded-full"
+                />
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center relative z-10">
-              <motion.div 
-                animate={{ rotate: isPlaying ? 360 : 0 }}
-                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                className="relative"
-              >
-                <div className="w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gradient-to-br from-zinc-800 to-black p-1 shadow-[0_0_100px_rgba(0,0,0,0.5)] border-4 border-white/5 relative flex items-center justify-center overflow-hidden">
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-150" />
-                    <Disc className="w-full h-full text-white/5" />
-                    <div className="absolute w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center backdrop-blur-sm overflow-hidden">
-                         <Music className={`w-10 h-10 ${isPlaying ? 'text-pink-500 animate-pulse' : 'text-white/20'}`} />
+            <div className="w-full max-w-lg space-y-12 relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                    <Button variant="ghost" size="icon" onClick={resetPlayer} className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all">
+                        <X className="w-5 h-5" />
+                    </Button>
+                    <div className="text-center">
+                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30">Now Playing</p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all">
+                        <ListMusic className="w-5 h-5" />
+                    </Button>
+                </div>
+
+                <div className="space-y-12">
+                    <div className="relative group">
+                        <div className="absolute -inset-10 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-pink-600/20 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                        <div className="w-72 h-72 sm:w-80 sm:h-80 mx-auto bg-gradient-to-br from-zinc-800 to-zinc-950 rounded-[3rem] p-1 shadow-2xl relative overflow-hidden ring-1 ring-white/10">
+                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-150" />
+                            <div className="w-full h-full rounded-[2.8rem] bg-zinc-900 flex items-center justify-center relative">
+                                <motion.div 
+                                    animate={{ 
+                                        rotate: isPlaying ? 360 : 0,
+                                        scale: isPlaying ? [1, 1.05, 1] : 1
+                                    }}
+                                    transition={{ 
+                                        rotate: { duration: 20, repeat: Infinity, ease: "linear" },
+                                        scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                                    }}
+                                    className="w-48 h-48 rounded-full border-4 border-white/5 flex items-center justify-center relative"
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/40">
+                                        <Music className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div className="absolute inset-0 border-t-4 border-indigo-500 rounded-full opacity-50" />
+                                </motion.div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="text-center space-y-2">
+                        <motion.h3 
+                            layoutId="title"
+                            className="text-2xl font-black uppercase italic tracking-tight truncate max-w-md mx-auto"
+                        >
+                            {localFile?.name || "Streaming Audio"}
+                        </motion.h3>
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">
+                            {localFile ? "Local Protocol" : "Network Stream"}
+                        </p>
+                    </div>
+
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <Slider
+                                value={[currentTime]}
+                                max={duration || 100}
+                                step={0.1}
+                                onValueChange={handleSeek}
+                                className="cursor-pointer"
+                            />
+                            <div className="flex justify-between">
+                                <span className="text-[10px] font-black font-mono text-white/30">{formatTime(currentTime)}</span>
+                                <span className="text-[10px] font-black font-mono text-white/30">{formatTime(duration)}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-10">
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => setIsShuffle(!isShuffle)}
+                                className={`w-10 h-10 rounded-full transition-all ${isShuffle ? 'text-indigo-400 bg-indigo-400/10' : 'text-white/20'}`}
+                            >
+                                <Shuffle className="w-4 h-4" />
+                            </Button>
+                            
+                            <div className="flex items-center gap-6">
+                                <Button variant="ghost" size="icon" className="w-12 h-12 rounded-full text-white/40 hover:text-white hover:bg-white/5">
+                                    <SkipBack className="w-6 h-6 fill-current" />
+                                </Button>
+                                
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={togglePlay}
+                                    className="w-24 h-24 rounded-full bg-white text-black flex items-center justify-center shadow-2xl shadow-white/10 hover:scale-105 transition-all"
+                                >
+                                    {isPlaying ? (
+                                        <Pause className="w-10 h-10 fill-current" />
+                                    ) : (
+                                        <Play className="w-10 h-10 fill-current ml-2" />
+                                    )}
+                                </motion.button>
+
+                                <Button variant="ghost" size="icon" className="w-12 h-12 rounded-full text-white/40 hover:text-white hover:bg-white/5">
+                                    <SkipForward className="w-6 h-6 fill-current" />
+                                </Button>
+                            </div>
+
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => setIsRepeat(!isRepeat)}
+                                className={`w-10 h-10 rounded-full transition-all ${isRepeat ? 'text-indigo-400 bg-indigo-400/10' : 'text-white/20'}`}
+                            >
+                                <Repeat className="w-4 h-4" />
+                            </Button>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-6 pt-4">
+                            <Button variant="ghost" size="icon" className="text-white/20 hover:text-pink-500 transition-colors">
+                                <Heart className="w-5 h-5" />
+                            </Button>
+                            <div className="flex items-center gap-3 w-40">
+                                <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white/30 hover:text-white shrink-0">
+                                    {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                                </Button>
+                                <Slider
+                                    value={[isMuted ? 0 : volume]}
+                                    max={1}
+                                    step={0.01}
+                                    onValueChange={handleVolumeChange}
+                                />
+                            </div>
+                            <Button variant="ghost" size="icon" className="text-white/20">
+                                <Plus className="w-5 h-5" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
-              </motion.div>
-
-              <div className="mt-12 text-center space-y-2 max-w-md">
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter truncate px-4">
-                  {localFile?.name?.replace(/\.[^/.]+$/, "") || "Digital Stream"}
-                </h3>
-                <p className="text-xs font-bold uppercase tracking-[0.4em] text-pink-500/70">Secure Node Playback</p>
-              </div>
-
-              <div className="mt-12 w-full max-w-xl space-y-8 bg-white/[0.03] border border-white/10 p-8 rounded-[3rem] backdrop-blur-2xl">
-                <div className="space-y-4">
-                  <Slider
-                    value={[currentTime]}
-                    max={duration || 100}
-                    step={0.1}
-                    onValueChange={handleSeek}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                   <Button variant="ghost" size="icon" onClick={() => setIsLiked(!isLiked)} className={isLiked ? "text-pink-500" : "text-white/20"}>
-                    <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
-                   </Button>
-                   
-                   <div className="flex items-center gap-6 sm:gap-10">
-                    <Button variant="ghost" size="icon" className="text-white/30 hover:text-white"><Shuffle className="w-5 h-5" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => { if(audioRef.current) audioRef.current.currentTime = 0 }} className="text-white/50 hover:text-white"><SkipBack className="w-8 h-8 fill-current" /></Button>
-                    
-                    <Button 
-                      onClick={togglePlay}
-                      className="h-20 w-20 rounded-full bg-white text-black hover:scale-105 transition-transform shadow-[0_0_50px_rgba(255,255,255,0.2)]"
-                    >
-                      {isPlaying ? <Pause className="w-10 h-10 fill-current" /> : <Play className="w-10 h-10 fill-current ml-1" />}
-                    </Button>
-
-                    <Button variant="ghost" size="icon" onClick={() => { if(audioRef.current) audioRef.current.currentTime = duration }} className="text-white/50 hover:text-white"><SkipForward className="w-8 h-8 fill-current" /></Button>
-                    <Button variant="ghost" size="icon" className="text-white/30 hover:text-white"><Repeat className="w-5 h-5" /></Button>
-                   </div>
-
-                   <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white/30 hover:text-white">
-                        {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                    </Button>
-                    <div className="w-24 hidden md:block">
-                        <Slider
-                            value={[isMuted ? 0 : volume]}
-                            max={1}
-                            step={0.01}
-                            onValueChange={handleVolumeChange}
-                        />
-                    </div>
-                   </div>
-                </div>
-              </div>
             </div>
 
             <audio
@@ -296,7 +351,16 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
               src={audioSource}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
-              onEnded={() => setIsPlaying(false)}
+              onEnded={() => {
+                  if (isRepeat) {
+                      if (audioRef.current) {
+                          audioRef.current.currentTime = 0;
+                          audioRef.current.play();
+                      }
+                  } else {
+                      setIsPlaying(false);
+                  }
+              }}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
             />
