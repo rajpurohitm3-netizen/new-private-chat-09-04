@@ -9,8 +9,8 @@ import {
     MessageCircle, Phone, Settings, LogOut, Users,
     Search, ChevronRight, Shield, Plus,
     Home, Camera, X, Menu, User, Heart,
-    ExternalLink, Flame, Film, CalendarHeart, Lock, Layers, Image, UserPlus, Bell, Clock, Check, Trash2, Send, Music,
-    RefreshCw, MoreVertical
+    ExternalLink, Flame, Film, CalendarHeart, Lock, Layers, Image, UserPlus, Bell, Clock, Check, Trash2, Send,
+    RefreshCw, MoreVertical, Music
   } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AvatarDisplay } from "@/components/AvatarDisplay";
@@ -25,7 +25,6 @@ import { PasswordGate } from "@/components/PasswordGate";
 import { FriendRequests } from "@/components/FriendRequests";
 import { Cinema } from "@/components/Cinema";
 import { Countdown } from "@/components/Countdown";
-import { MusicTogether } from "@/components/MusicTogether";
 import { generateKeyPair, exportPublicKey, exportPrivateKey } from "@/lib/crypto";
 
 type ActiveView = "dashboard" | "chat" | "calls" | "connections" | "settings" | "advanced";
@@ -91,9 +90,10 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [friends, setFriends] = useState<string[]>([]);
-    const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
-    const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "music" | "memories">("menu");
-    const [friendSearchQuery, setFriendSearchQuery] = useState("");
+  const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
+    const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "music" | "music-solo" | "memories">("menu");
+
+  const [friendSearchQuery, setFriendSearchQuery] = useState("");
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
@@ -522,12 +522,13 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     { id: "settings", icon: Settings, label: "Entity" },
   ];
 
-const advancedFeatures = [
-      { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
-      { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
-      { id: "music", icon: Music, label: "Music", desc: "Listen together", color: "from-indigo-600 to-blue-600" },
-      { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
-    ];
+  const advancedFeatures = [
+        { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
+        { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
+        { id: "music", icon: Music, label: "Music", desc: "Listen together", color: "from-indigo-600 to-blue-600" },
+        { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
+      ];
+
 
   const filteredFriendResults = profiles.filter(p =>
     p.username?.toLowerCase().includes(friendSearchQuery.toLowerCase())
@@ -1196,8 +1197,6 @@ const advancedFeatures = [
                         </motion.div>
                         
                         <motion.div
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
                           className="p-8 bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/20 rounded-3xl cursor-default"
                         >
                           <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center mb-4">
@@ -1226,7 +1225,7 @@ const advancedFeatures = [
                                 {onlineUsers.has(p.id) ? 'Online' : formatLastSeen(p.last_seen)}
                               </p>
                             </div>
-                            <Button onClick={() => setActiveWatchParty({ contact: p })} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
+                            <Button onClick={() => setActiveWatchParty({ contact: p, isMusicMode: false })} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
                               <Film className="w-4 h-4 mr-2" /> Start Watch Party
                             </Button>
                           </div>
@@ -1236,19 +1235,67 @@ const advancedFeatures = [
                   )}
 
                   {advancedSubView === "music" && (
-                    <div className="p-6 sm:p-8 pb-32 lg:pb-12 h-full flex flex-col">
-                      <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white w-fit">
+                    <div className="p-6 sm:p-8 pb-32 lg:pb-12">
+                      <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
                         <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
                       </Button>
                       <div className="mb-8">
                         <h2 className="text-2xl font-black uppercase italic mb-2">Music Together</h2>
-                        <p className="text-sm text-white/40">Listen to music synchronized with your partner</p>
+                        <p className="text-sm text-white/40">Listen to music alone or with friends</p>
                       </div>
-                      <div className="flex-1 bg-zinc-900/50 rounded-[2.5rem] border border-white/5 overflow-hidden">
-                        <MusicTogether session={session} />
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setAdvancedSubView("music-solo")}
+                          className="p-8 bg-gradient-to-br from-blue-900/30 to-indigo-900/30 border border-blue-500/20 rounded-3xl cursor-pointer hover:border-blue-500/40 transition-all group"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Music className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Solo Listen</h3>
+                          <p className="text-sm text-white/40">Listen to your favorite tracks alone</p>
+                        </motion.div>
+                        
+                        <motion.div
+                          className="p-8 bg-gradient-to-br from-indigo-900/30 to-purple-900/30 border border-indigo-500/20 rounded-3xl cursor-default"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mb-4">
+                            <Users className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Listen Together</h3>
+                          <p className="text-sm text-white/40 mb-4">Sync playback with a friend (select below)</p>
+                        </motion.div>
+                      </div>
+
+                      <div className="mb-4">
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Start Listening With</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {friendProfiles.map(p => (
+                          <div key={p.id} className="p-6 bg-gradient-to-br from-indigo-900/20 to-blue-900/20 border border-white/5 rounded-3xl flex flex-col items-center gap-4 hover:border-blue-500/30 transition-all group">
+                            <div className="cursor-pointer hover:scale-105 transition-transform relative" onClick={() => router.push(`/profile/${p.id}`)}>
+                              <AvatarDisplay profile={p} className="h-16 w-16" />
+                              <div className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 rounded-full">
+                                <Music className="w-3 h-3 text-white" />
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-black text-lg uppercase cursor-pointer hover:text-blue-400 transition-colors" onClick={() => router.push(`/profile/${p.id}`)}>{p.username}</p>
+                              <p className={`text-[10px] font-bold uppercase tracking-widest ${onlineUsers.has(p.id) ? 'text-emerald-500' : 'text-white/20'}`}>
+                                {onlineUsers.has(p.id) ? 'Online' : formatLastSeen(p.last_seen)}
+                              </p>
+                            </div>
+                            <Button onClick={() => setActiveWatchParty({ contact: p, isMusicMode: true })} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
+                              <Music className="w-4 h-4 mr-2" /> Listen Together
+                            </Button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
+
 
                 {advancedSubView === "cinema-solo" && (
                   <div className="h-full flex flex-col">
@@ -1263,7 +1310,21 @@ const advancedFeatures = [
                   </div>
                 )}
 
-                {advancedSubView === "vault" && (
+                  {advancedSubView === "music-solo" && (
+                    <div className="h-full flex flex-col">
+                      <div className="p-6 border-b border-white/5">
+                        <Button variant="ghost" onClick={() => setAdvancedSubView("music")} className="text-white/40 hover:text-white">
+                          <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Music
+                        </Button>
+                      </div>
+                      <div className="flex-1 h-[calc(100%-80px)]">
+                        <Cinema isMusicMode={true} />
+                      </div>
+                    </div>
+                  )}
+
+                  {advancedSubView === "vault" && (
+
                   <div className="h-full flex flex-col">
                     <div className="p-6 border-b border-white/5">
                       <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="text-white/40 hover:text-white">
@@ -1335,17 +1396,19 @@ const advancedFeatures = [
 
         <AnimatePresence>
           {activeCall && <VideoCall key="video-call" userId={session.user.id} privateKey={privateKey} contact={activeCall.contact} callType={activeCall.mode} isInitiator={activeCall.isInitiator} incomingSignal={activeCall.incomingSignal} onClose={() => setActiveCall(null)} />}
-          {activeWatchParty && (
-            <WatchParty 
-              key="watch-party"
-              userId={session.user.id} 
-              privateKey={privateKey}
-              contact={activeWatchParty.contact} 
-              isInitiator={activeWatchParty.isInitiator ?? true} 
-              incomingSignal={activeWatchParty.incomingSignal} 
-              onClose={() => setActiveWatchParty(null)} 
-            />
-          )}
+            {activeWatchParty && (
+              <WatchParty 
+                key="watch-party"
+                userId={session.user.id} 
+                privateKey={privateKey}
+                contact={activeWatchParty.contact} 
+                isInitiator={activeWatchParty.isInitiator ?? true} 
+                incomingSignal={activeWatchParty.incomingSignal} 
+                onClose={() => setActiveWatchParty(null)} 
+                isMusicMode={activeWatchParty.isMusicMode}
+              />
+            )}
+
           {incomingCall && !activeCall && (
             <motion.div key="incoming-call" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
               <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-10 max-w-sm w-full text-center space-y-8">
