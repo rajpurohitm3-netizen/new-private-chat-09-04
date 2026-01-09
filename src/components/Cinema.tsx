@@ -39,53 +39,8 @@ export function Cinema({ onClose }: CinemaProps) {
   const [urlInput, setUrlInput] = useState("");
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [youtubeId, setYoutubeId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const youtubePlayerRef = useRef<any>(null);
-
-  const getYoutubeId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
-
-  useEffect(() => {
-    const id = getYoutubeId(videoSource);
-    setYoutubeId(id);
-    if (id && !window.YT) {
-      const tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-      window.onYouTubeIframeAPIReady = () => initializeYoutubePlayer(id);
-    } else if (id && window.YT) {
-      initializeYoutubePlayer(id);
-    }
-  }, [videoSource]);
-
-  const initializeYoutubePlayer = (id: string) => {
-    if (youtubePlayerRef.current) youtubePlayerRef.current.destroy();
-    youtubePlayerRef.current = new window.YT.Player('youtube-player-solo', {
-      videoId: id,
-      playerVars: { autoplay: 1, controls: 0, modestbranding: 1 },
-      events: {
-        onStateChange: (event: any) => {
-          setIsPlaying(event.data === window.YT.PlayerState.PLAYING);
-        },
-        onReady: () => {
-          setDuration(youtubePlayerRef.current.getDuration());
-          const interval = setInterval(() => {
-            if (youtubePlayerRef.current?.getCurrentTime) {
-              setCurrentTime(youtubePlayerRef.current.getCurrentTime());
-            }
-          }, 500);
-          return () => clearInterval(interval);
-        }
-      }
-    });
-  };
-
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -323,23 +278,17 @@ export function Cinema({ onClose }: CinemaProps) {
             onMouseMove={showControls}
             onClick={() => !controlsVisible && showControls()}
           >
-        {youtubeId ? (
-          <div className="flex-1 w-full h-full pointer-events-none">
-            <div id="youtube-player-solo" className="w-full h-full" />
-          </div>
-        ) : (
-          <video
-            ref={videoRef}
-            src={videoSource}
-            className="flex-1 w-full object-contain bg-black"
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={() => setIsPlaying(false)}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onClick={togglePlay}
-          />
-        )}
+            <video
+              ref={videoRef}
+              src={videoSource}
+              className="flex-1 w-full object-contain bg-black"
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onEnded={() => setIsPlaying(false)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onClick={togglePlay}
+            />
 
             <AnimatePresence>
               {controlsVisible && (

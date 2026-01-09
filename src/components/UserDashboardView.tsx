@@ -24,6 +24,7 @@ import { PrivateSafe } from "@/components/PrivateSafe";
 import { PasswordGate } from "@/components/PasswordGate";
 import { FriendRequests } from "@/components/FriendRequests";
 import { Cinema } from "@/components/Cinema";
+import { MusicTogether } from "@/components/MusicTogether";
 import { Countdown } from "@/components/Countdown";
 import { generateKeyPair, exportPublicKey, exportPrivateKey } from "@/lib/crypto";
 
@@ -89,10 +90,10 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
   const [incomingCall, setIncomingCall] = useState<any>(null);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
-  const [friends, setFriends] = useState<string[]>([]);
-  const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
-  const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "music" | "memories">("menu");
-  const [friendSearchQuery, setFriendSearchQuery] = useState("");
+    const [friends, setFriends] = useState<string[]>([]);
+    const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
+    const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "music-together" | "music-together-solo" | "memories">("menu");
+    const [friendSearchQuery, setFriendSearchQuery] = useState("");
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
@@ -521,12 +522,12 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
     { id: "settings", icon: Settings, label: "Entity" },
   ];
 
-  const advancedFeatures = [
-        { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
-        { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
-        { id: "music", icon: Music, label: "Music Together", desc: "Listen & watch music with friends", color: "from-indigo-600 to-blue-600" },
-        { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
-      ];
+const advancedFeatures = [
+      { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
+      { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
+      { id: "music-together", icon: Music, label: "Music Together", desc: "Listen and watch music", color: "from-indigo-600 to-blue-600" },
+      { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
+    ];
 
   const filteredFriendResults = profiles.filter(p =>
     p.username?.toLowerCase().includes(friendSearchQuery.toLowerCase())
@@ -1170,18 +1171,109 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
                   </div>
                 )}
 
-                  {advancedSubView === "music" && (
+                  {advancedSubView === "cinema" && (
+                    <div className="p-6 sm:p-8 pb-32 lg:pb-12">
+                      <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
+                        <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
+                      </Button>
+                      <div className="mb-8">
+                        <h2 className="text-2xl font-black uppercase italic mb-2">Cinema Mode</h2>
+                        <p className="text-sm text-white/40">Watch movies alone or with friends</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setAdvancedSubView("cinema-solo")}
+                          className="p-8 bg-gradient-to-br from-purple-900/30 to-indigo-900/30 border border-purple-500/20 rounded-3xl cursor-pointer hover:border-purple-500/40 transition-all group"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Film className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Solo Watch</h3>
+                          <p className="text-sm text-white/40">Upload file or paste link to watch alone</p>
+                        </motion.div>
+                        
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="p-8 bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/20 rounded-3xl cursor-default"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                            <Users className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Watch Party</h3>
+                          <p className="text-sm text-white/40 mb-4">Watch together with a friend (select below)</p>
+                        </motion.div>
+                      </div>
+
+                      <div className="mb-4">
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Start Watch Party With</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {friendProfiles.map(p => (
+                          <div key={p.id} className="p-6 bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-white/5 rounded-3xl flex flex-col items-center gap-4 hover:border-purple-500/30 transition-all group">
+                            <div className="cursor-pointer hover:scale-105 transition-transform relative" onClick={() => router.push(`/profile/${p.id}`)}>
+                              <AvatarDisplay profile={p} className="h-16 w-16" />
+                              <div className="absolute -bottom-1 -right-1 p-1.5 bg-purple-600 rounded-full">
+                                <Film className="w-3 h-3 text-white" />
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-black text-lg uppercase cursor-pointer hover:text-purple-400 transition-colors" onClick={() => router.push(`/profile/${p.id}`)}>{p.username}</p>
+                              <p className={`text-[10px] font-bold uppercase tracking-widest ${onlineUsers.has(p.id) ? 'text-emerald-500' : 'text-white/20'}`}>
+                                {onlineUsers.has(p.id) ? 'Online' : formatLastSeen(p.last_seen)}
+                              </p>
+                            </div>
+                            <Button onClick={() => setActiveWatchParty({ contact: p })} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
+                              <Film className="w-4 h-4 mr-2" /> Start Watch Party
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {advancedSubView === "music-together" && (
                     <div className="p-6 sm:p-8 pb-32 lg:pb-12">
                       <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
                         <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
                       </Button>
                       <div className="mb-8">
                         <h2 className="text-2xl font-black uppercase italic mb-2">Music Together</h2>
-                        <p className="text-sm text-white/40">Listen and watch music videos with friends in sync</p>
+                        <p className="text-sm text-white/40">Sync your frequencies with friends</p>
                       </div>
                       
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setAdvancedSubView("music-together-solo")}
+                          className="p-8 bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/20 rounded-3xl cursor-pointer hover:border-indigo-500/40 transition-all group"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <Music className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Solo Player</h3>
+                          <p className="text-sm text-white/40">Listen alone or watch music videos</p>
+                        </motion.div>
+                        
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="p-8 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border border-blue-500/20 rounded-3xl cursor-default"
+                        >
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center mb-4">
+                            <Users className="w-8 h-8 text-white" />
+                          </div>
+                          <h3 className="text-xl font-black uppercase mb-2">Sync Party</h3>
+                          <p className="text-sm text-white/40 mb-4">Listen together with a friend (select below)</p>
+                        </motion.div>
+                      </div>
+
                       <div className="mb-4">
-                        <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Select Friend to Listen With</h3>
+                        <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Initialize Sync With</h3>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {friendProfiles.map(p => (
@@ -1199,7 +1291,7 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
                               </p>
                             </div>
                             <Button onClick={() => setActiveWatchParty({ contact: p })} className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 uppercase text-[10px] tracking-widest">
-                              <Music className="w-4 h-4 mr-2" /> Start Listening
+                              <Music className="w-4 h-4 mr-2" /> Start Music Sync
                             </Button>
                           </div>
                         ))}
@@ -1207,82 +1299,31 @@ export function UserDashboardView({ session, privateKey }: UserDashboardViewProp
                     </div>
                   )}
 
-                  {advancedSubView === "cinema" && (
-                  <div className="p-6 sm:p-8 pb-32 lg:pb-12">
-                    <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
-                      <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
-                    </Button>
-                    <div className="mb-8">
-                      <h2 className="text-2xl font-black uppercase italic mb-2">Cinema Mode</h2>
-                      <p className="text-sm text-white/40">Watch movies alone or with friends</p>
+                  {advancedSubView === "cinema-solo" && (
+                    <div className="h-full flex flex-col">
+                      <div className="p-6 border-b border-white/5">
+                        <Button variant="ghost" onClick={() => setAdvancedSubView("cinema")} className="text-white/40 hover:text-white">
+                          <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Cinema
+                        </Button>
+                      </div>
+                      <div className="flex-1 h-[calc(100%-80px)]">
+                        <Cinema />
+                      </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setAdvancedSubView("cinema-solo")}
-                        className="p-8 bg-gradient-to-br from-purple-900/30 to-indigo-900/30 border border-purple-500/20 rounded-3xl cursor-pointer hover:border-purple-500/40 transition-all group"
-                      >
-                        <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                          <Film className="w-8 h-8 text-white" />
-                        </div>
-                        <h3 className="text-xl font-black uppercase mb-2">Solo Watch</h3>
-                        <p className="text-sm text-white/40">Upload file or paste link to watch alone</p>
-                      </motion.div>
-                      
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="p-8 bg-gradient-to-br from-indigo-900/30 to-blue-900/30 border border-indigo-500/20 rounded-3xl cursor-default"
-                      >
-                        <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl flex items-center justify-center mb-4">
-                          <Users className="w-8 h-8 text-white" />
-                        </div>
-                        <h3 className="text-xl font-black uppercase mb-2">Watch Party</h3>
-                        <p className="text-sm text-white/40 mb-4">Watch together with a friend (select below)</p>
-                      </motion.div>
-                    </div>
+                  )}
 
-                    <div className="mb-4">
-                      <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4">Start Watch Party With</h3>
+                  {advancedSubView === "music-together-solo" && (
+                    <div className="h-full flex flex-col">
+                      <div className="p-6 border-b border-white/5">
+                        <Button variant="ghost" onClick={() => setAdvancedSubView("music-together")} className="text-white/40 hover:text-white">
+                          <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Music
+                        </Button>
+                      </div>
+                      <div className="flex-1 h-[calc(100%-80px)]">
+                        <MusicTogether />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {friendProfiles.map(p => (
-                        <div key={p.id} className="p-6 bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-white/5 rounded-3xl flex flex-col items-center gap-4 hover:border-purple-500/30 transition-all group">
-                          <div className="cursor-pointer hover:scale-105 transition-transform relative" onClick={() => router.push(`/profile/${p.id}`)}>
-                            <AvatarDisplay profile={p} className="h-16 w-16" />
-                            <div className="absolute -bottom-1 -right-1 p-1.5 bg-purple-600 rounded-full">
-                              <Film className="w-3 h-3 text-white" />
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <p className="font-black text-lg uppercase cursor-pointer hover:text-purple-400 transition-colors" onClick={() => router.push(`/profile/${p.id}`)}>{p.username}</p>
-                            <p className={`text-[10px] font-bold uppercase tracking-widest ${onlineUsers.has(p.id) ? 'text-emerald-500' : 'text-white/20'}`}>
-                              {onlineUsers.has(p.id) ? 'Online' : formatLastSeen(p.last_seen)}
-                            </p>
-                          </div>
-                          <Button onClick={() => setActiveWatchParty({ contact: p })} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
-                            <Film className="w-4 h-4 mr-2" /> Start Watch Party
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {advancedSubView === "cinema-solo" && (
-                  <div className="h-full flex flex-col">
-                    <div className="p-6 border-b border-white/5">
-                      <Button variant="ghost" onClick={() => setAdvancedSubView("cinema")} className="text-white/40 hover:text-white">
-                        <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Cinema
-                      </Button>
-                    </div>
-                    <div className="flex-1 h-[calc(100%-80px)]">
-                      <Cinema />
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {advancedSubView === "vault" && (
                   <div className="h-full flex flex-col">

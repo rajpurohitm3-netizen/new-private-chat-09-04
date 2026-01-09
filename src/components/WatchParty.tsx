@@ -68,37 +68,28 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const [movieUrl, setMovieUrl] = useState("");
   const [localMovieFile, setLocalMovieFile] = useState<File | null>(null);
   const [localMovieUrl, setLocalMovieUrl] = useState("");
-  const [youtubeId, setYoutubeId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [volume, setVolume] = useState(1);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [showChat, setShowChat] = useState(false);
+    const [chatMessages, setChatMessages] = useState<{id: string; text: string; sender: string; time: Date}[]>([]);
+    const [chatInput, setChatInput] = useState("");
+    const [receivingVideo, setReceivingVideo] = useState(false);
+    const [videoReceiveProgress, setVideoReceiveProgress] = useState(0);
+    const [totalVideoSize, setTotalVideoSize] = useState(0);
+    const [sendingVideo, setSendingVideo] = useState(false);
+    const [videoSendProgress, setVideoSendProgress] = useState(0);
+    const [videosExpanded, setVideosExpanded] = useState(true);
+    const [isYoutube, setIsYoutube] = useState(false);
+    const [youtubeId, setYoutubeId] = useState<string | null>(null);
 
-  const getYoutubeId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-  };
-
-  useEffect(() => {
-    const id = getYoutubeId(movieUrl);
-    setYoutubeId(id);
-  }, [movieUrl]);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showChat, setShowChat] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{id: string; text: string; sender: string; time: Date}[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [receivingVideo, setReceivingVideo] = useState(false);
-  const [videoReceiveProgress, setVideoReceiveProgress] = useState(0);
-  const [totalVideoSize, setTotalVideoSize] = useState(0);
-  const [sendingVideo, setSendingVideo] = useState(false);
-  const [videoSendProgress, setVideoSendProgress] = useState(0);
-  const [videosExpanded, setVideosExpanded] = useState(true);
-
-  const myVideo = useRef<HTMLVideoElement>(null);
-  const userVideo = useRef<HTMLVideoElement>(null);
-  const remoteAudio = useRef<HTMLAudioElement>(null);
-  const movieVideo = useRef<HTMLVideoElement>(null);
+    const myVideo = useRef<HTMLVideoElement>(null);
+    const userVideo = useRef<HTMLVideoElement>(null);
+    const remoteAudio = useRef<HTMLAudioElement>(null);
+    const movieVideo = useRef<HTMLVideoElement>(null);
+    const ytPlayerRef = useRef<any>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -112,68 +103,72 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const videoChunksRef = useRef<ArrayBuffer[]>([]);
   const expectedChunksRef = useRef<number>(0);
   const receivedChunksCountRef = useRef<number>(0);
-  const partnerPublicKeyRef = useRef<CryptoKey | null>(null);
-  const youtubePlayerRef = useRef<any>(null);
+    const partnerPublicKeyRef = useRef<CryptoKey | null>(null);
 
-  useEffect(() => {
-    if (youtubeId && !window.YT) {
-      const tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-
-      window.onYouTubeIframeAPIReady = () => {
-        initializeYoutubePlayer();
-      };
-    } else if (youtubeId && window.YT) {
-      initializeYoutubePlayer();
-    }
-    
-    return () => {
-      if (youtubePlayerRef.current) {
-        youtubePlayerRef.current.destroy();
-        youtubePlayerRef.current = null;
-      }
+    const getYoutubeId = (url: string) => {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
     };
-  }, [youtubeId]);
 
-  const initializeYoutubePlayer = () => {
-    if (youtubePlayerRef.current) youtubePlayerRef.current.destroy();
-    
-    youtubePlayerRef.current = new window.YT.Player('youtube-player', {
-      videoId: youtubeId,
-      playerVars: {
-        autoplay: 1,
-        controls: 0,
-        disablekb: 1,
-        fs: 0,
-        rel: 0,
-        modestbranding: 1
-      },
-      events: {
-        onStateChange: (event: any) => {
-          if (event.data === window.YT.PlayerState.PLAYING) {
-            setIsPlaying(true);
-            setDuration(youtubePlayerRef.current.getDuration());
-          } else if (event.data === window.YT.PlayerState.PAUSED) {
-            setIsPlaying(false);
-          }
-        },
-        onReady: () => {
-          setDuration(youtubePlayerRef.current.getDuration());
-          const interval = setInterval(() => {
-            if (youtubePlayerRef.current && youtubePlayerRef.current.getCurrentTime) {
-              setCurrentTime(youtubePlayerRef.current.getCurrentTime());
+    useEffect(() => {
+      if (youtubeId && !ytPlayerRef.current) {
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+
+        (window as any).onYouTubeIframeAPIReady = () => {
+          ytPlayerRef.current = new (window as any).YT.Player('youtube-party-player', {
+            height: '100%',
+            width: '100%',
+            videoId: youtubeId,
+            playerVars: {
+              'autoplay': 1,
+              'controls': 0,
+              'modestbranding': 1,
+              'rel': 0,
+            },
+            events: {
+              'onReady': (event: any) => {
+                setDuration(event.target.getDuration());
+                if (isPlaying) event.target.playVideo();
+              },
+              'onStateChange': (event: any) => {
+                if (event.data === (window as any).YT.PlayerState.PLAYING) setIsPlaying(true);
+                if (event.data === (window as any).YT.PlayerState.PAUSED) setIsPlaying(false);
+              }
             }
-          }, 500);
-          return () => clearInterval(interval);
+          });
+        };
+
+        if ((window as any).YT && (window as any).YT.Player) {
+          (window as any).onYouTubeIframeAPIReady();
         }
       }
-    });
-  };
 
-  useEffect(() => {
-    if (myVideo.current && stream) {
+      return () => {
+        if (ytPlayerRef.current) {
+          try {
+            ytPlayerRef.current.destroy();
+          } catch (e) {}
+          ytPlayerRef.current = null;
+        }
+      };
+    }, [youtubeId]);
+
+    useEffect(() => {
+      let interval: NodeJS.Timeout;
+      if (isPlaying && youtubeId && ytPlayerRef.current) {
+        interval = setInterval(() => {
+          setCurrentTime(ytPlayerRef.current.getCurrentTime());
+        }, 1000);
+      }
+      return () => clearInterval(interval);
+    }, [isPlaying, youtubeId]);
+
+    useEffect(() => {
+      if (myVideo.current && stream) {
       myVideo.current.srcObject = stream;
       myVideo.current.play().catch((e) => console.error("My video play failed:", e));
     }
@@ -383,31 +378,40 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
         videoChunksRef.current = [];
         toast.success("Video received! Ready to play.");
       } else if (data.action === "play") {
-        if (youtubeId && youtubePlayerRef.current) {
-          youtubePlayerRef.current.seekTo(data.time, true);
-          youtubePlayerRef.current.playVideo();
+        if (data.isYoutube && ytPlayerRef.current) {
+          ytPlayerRef.current.seekTo(data.time, true);
+          ytPlayerRef.current.playVideo();
         } else if (movieVideo.current) {
           movieVideo.current.currentTime = data.time;
           movieVideo.current.play().catch(e => console.error("Auto-play failed:", e));
         }
         setIsPlaying(true);
       } else if (data.action === "pause") {
-        if (youtubeId && youtubePlayerRef.current) {
-          youtubePlayerRef.current.seekTo(data.time, true);
-          youtubePlayerRef.current.pauseVideo();
+        if (data.isYoutube && ytPlayerRef.current) {
+          ytPlayerRef.current.seekTo(data.time, true);
+          ytPlayerRef.current.pauseVideo();
         } else if (movieVideo.current) {
           movieVideo.current.currentTime = data.time;
           movieVideo.current.pause();
         }
         setIsPlaying(false);
       } else if (data.action === "seek") {
-        if (youtubeId && youtubePlayerRef.current) {
-          youtubePlayerRef.current.seekTo(data.time, true);
+        if (data.isYoutube && ytPlayerRef.current) {
+          ytPlayerRef.current.seekTo(data.time, true);
         } else if (movieVideo.current) {
           movieVideo.current.currentTime = data.time;
         }
       } else if (data.action === "url" && data.url) {
         setMovieUrl(data.url);
+        if (data.isYoutube) {
+          const ytId = getYoutubeId(data.url);
+          if (ytId) {
+            setIsYoutube(true);
+            setYoutubeId(ytId);
+          }
+        } else {
+          setIsYoutube(false);
+        }
         setShowVideoSetup(false);
       } else if (data.action === "chat" && data.message) {
         setChatMessages(prev => [...prev, {
@@ -643,22 +647,28 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
 
   const handleUrlSubmit = () => {
     if (movieUrl.trim()) {
-      sendSyncMessage("url", { url: movieUrl });
+      const ytId = getYoutubeId(movieUrl.trim());
+      if (ytId) {
+        setIsYoutube(true);
+        setYoutubeId(ytId);
+      } else {
+        setIsYoutube(false);
+      }
+      sendSyncMessage("url", { url: movieUrl.trim(), isYoutube: !!ytId });
       setShowVideoSetup(false);
     }
   };
 
   const handlePlayPause = () => {
-    if (youtubeId && youtubePlayerRef.current) {
+    if (isYoutube && ytPlayerRef.current) {
       if (isPlaying) {
-        youtubePlayerRef.current.pauseVideo();
-        sendSyncMessage("pause", { time: youtubePlayerRef.current.getCurrentTime() });
-        setIsPlaying(false);
+        ytPlayerRef.current.pauseVideo();
+        sendSyncMessage("pause", { time: ytPlayerRef.current.getCurrentTime() });
       } else {
-        youtubePlayerRef.current.playVideo();
-        sendSyncMessage("play", { time: youtubePlayerRef.current.getCurrentTime() });
-        setIsPlaying(true);
+        ytPlayerRef.current.playVideo();
+        sendSyncMessage("play", { time: ytPlayerRef.current.getCurrentTime() });
       }
+      setIsPlaying(!isPlaying);
     } else if (movieVideo.current) {
       if (isPlaying) {
         movieVideo.current.pause();
@@ -673,36 +683,43 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   };
 
   const handleSeek = (value: number[]) => {
-    if (youtubeId && youtubePlayerRef.current) {
-      youtubePlayerRef.current.seekTo(value[0], true);
+    if (isYoutube && ytPlayerRef.current) {
+      ytPlayerRef.current.seekTo(value[0], true);
       sendSyncMessage("seek", { time: value[0] });
     } else if (movieVideo.current) {
       movieVideo.current.currentTime = value[0];
       sendSyncMessage("seek", { time: value[0] });
     }
+    setCurrentTime(value[0]);
   };
 
   const handleVolumeChange = (value: number[]) => {
-    if (movieVideo.current) {
+    setVolume(value[0]);
+    if (isYoutube && ytPlayerRef.current) {
+      ytPlayerRef.current.setVolume(value[0] * 100);
+    } else if (movieVideo.current) {
       movieVideo.current.volume = value[0];
-      setVolume(value[0]);
     }
   };
 
   const handleTimeUpdate = () => {
-    if (movieVideo.current) setCurrentTime(movieVideo.current.currentTime);
+    if (!isYoutube && movieVideo.current) setCurrentTime(movieVideo.current.currentTime);
   };
 
   const handleLoadedMetadata = () => {
-    if (movieVideo.current) setDuration(movieVideo.current.duration);
+    if (!isYoutube && movieVideo.current) setDuration(movieVideo.current.duration);
   };
 
   const skip = (seconds: number) => {
-    if (movieVideo.current) {
-      const newTime = movieVideo.current.currentTime + seconds;
+    let newTime = 0;
+    if (isYoutube && ytPlayerRef.current) {
+      newTime = ytPlayerRef.current.getCurrentTime() + seconds;
+      ytPlayerRef.current.seekTo(newTime, true);
+    } else if (movieVideo.current) {
+      newTime = movieVideo.current.currentTime + seconds;
       movieVideo.current.currentTime = Math.max(0, Math.min(newTime, duration));
-      sendSyncMessage("seek", { time: movieVideo.current.currentTime });
     }
+    sendSyncMessage("seek", { time: newTime });
   };
 
   const toggleFullscreen = () => {
@@ -947,24 +964,24 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
               )}
             </div>
           </div>
-      ) : (
-        <>
-        {youtubeId ? (
-          <div className="w-full h-full pointer-events-none">
-            <div id="youtube-player" className="w-full h-full" />
-          </div>
         ) : (
-          <video
-            ref={movieVideo}
-            src={localMovieUrl || movieUrl}
-            className="w-full h-full object-contain bg-black"
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            playsInline
-          />
-        )}
+          <>
+            {isYoutube ? (
+              <div className="w-full h-full bg-black flex items-center justify-center">
+                <div id="youtube-party-player" className="w-full h-full" />
+              </div>
+            ) : (
+              <video
+                ref={movieVideo}
+                src={localMovieUrl || movieUrl}
+                className="w-full h-full object-contain bg-black"
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                playsInline
+              />
+            )}
 
           <div className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 z-20">
             <motion.div className="flex items-start gap-2" initial={false}>
