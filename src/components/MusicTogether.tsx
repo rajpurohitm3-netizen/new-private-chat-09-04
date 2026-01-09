@@ -1,201 +1,167 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useRef, useEffect } from "react";
 import ReactPlayer from "react-player";
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Upload,
-  Link,
-  Music,
-  X,
-  Rewind,
-  FastForward,
-  Mic2,
+import { 
+  Play, 
+  Pause, 
+  SkipBack, 
+  SkipForward, 
+  Volume2, 
+  VolumeX, 
+  Music, 
+  Link as LinkIcon,
+  Search,
+  Users,
   Disc,
-  Headphones
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface MusicTogetherProps {
-  onClose?: () => void;
+  session: any;
+  contact?: any; // For party mode
+  isInitiator?: boolean;
 }
 
-export function MusicTogether({ onClose }: MusicTogetherProps) {
-  const [source, setSource] = useState<string>("");
-  const [localFile, setLocalFile] = useState<File | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+export function MusicTogether({ session, contact, isInitiator = true }: MusicTogetherProps) {
+  const [url, setUrl] = useState("");
+  const [playing, setPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const [muted, setMuted] = useState(false);
+  const [played, setPlayed] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showSetup, setShowSetup] = useState(true);
+  const [seeking, setSeeking] = useState(false);
   const [urlInput, setUrlInput] = useState("");
-  const [playbackRate, setPlaybackRate] = useState(1);
-
+  const [showUrlInput, setShowUrlInput] = useState(true);
+  
   const playerRef = useRef<ReactPlayer>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const channelRef = useRef<any>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLocalFile(file);
-      const url = URL.createObjectURL(file);
-      setSource(url);
-      setShowSetup(false);
+  useEffect(() => {
+    if (!contact) return;
+
+    const channelId = [session.user.id, contact.id].sort().join("-");
+    const channel = supabase.channel(`music-sync-${channelId}`)
+      .on("broadcast", { event: "sync" }, ({ payload }) => {
+        if (!isInitiator) {
+          if (payload.url !== url) setUrl(payload.url);
+          if (payload.playing !== playing) setPlaying(payload.playing);
+          if (Math.abs(payload.playedSeconds - (playerRef.current?.getCurrentTime() || 0)) > 2) {
+            playerRef.current?.seekTo(payload.playedSeconds, "seconds");
+          }
+        }
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [contact, session.user.id, isInitiator, url, playing]);
+
+  const handleSync = (data: any) => {
+    if (isInitiator && channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "sync",
+        payload: {
+          url,
+          playing,
+          playedSeconds: playerRef.current?.getCurrentTime() || 0,
+          ...data
+        }
+      });
     }
+  };
+
+  const handlePlayPause = () => {
+    const nextState = !playing;
+    setPlaying(nextState);
+    handleSync({ playing: nextState });
+  };
+
+  const handleSeekChange = (value: number[]) => {
+    setPlayed(value[0]);
+  };
+
+  const handleSeekMouseUp = (value: number[]) => {
+    setSeeking(false);
+    playerRef.current?.seekTo(value[0]);
+    handleSync({ playedSeconds: value[0] });
+  };
+
+  const handleProgress = (state: any) => {
+    if (!seeking) {
+      setPlayed(state.playedSeconds);
+    }
+  };
+
+  const handleDuration = (dur: number) => {
+    setDuration(dur);
   };
 
   const handleUrlSubmit = () => {
     if (urlInput.trim()) {
-      setSource(urlInput.trim());
-      setShowSetup(false);
+      setUrl(urlInput.trim());
+      setShowUrlInput(false);
+      setPlaying(true);
+      handleSync({ url: urlInput.trim(), playing: true });
     }
   };
 
-  const togglePlay = () => {
-    setIsPlaying(!isPlaying);
-  };
-
-  const handleProgress = (state: { playedSeconds: number }) => {
-    setCurrentTime(state.playedSeconds);
-  };
-
-  const handleDuration = (d: number) => {
-    setDuration(d);
-  };
-
-  const handleSeek = (value: number[]) => {
-    playerRef.current?.seekTo(value[0]);
-    setCurrentTime(value[0]);
-  };
-
-  const handleVolumeChange = (value: number[]) => {
-    setVolume(value[0]);
-    setIsMuted(value[0] === 0);
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-  };
-
-  const skip = (seconds: number) => {
-    const newTime = currentTime + seconds;
-    playerRef.current?.seekTo(newTime);
-  };
-
-  const formatTime = (time: number) => {
-    const mins = Math.floor(time / 60);
-    const secs = Math.floor(time % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const resetPlayer = () => {
-    if (localFile && source) {
-      URL.revokeObjectURL(source);
+  const formatTime = (seconds: number) => {
+    const date = new Date(seconds * 1000);
+    const hh = date.getUTCHours();
+    const mm = date.getUTCMinutes();
+    const ss = date.getUTCSeconds().toString().padStart(2, "0");
+    if (hh) {
+      return `${hh}:${mm.toString().padStart(2, "0")}:${ss}`;
     }
-    setSource("");
-    setLocalFile(null);
-    setShowSetup(true);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setUrlInput("");
+    return `${mm}:${ss}`;
   };
-
-  useEffect(() => {
-    return () => {
-      if (localFile && source) {
-        URL.revokeObjectURL(source);
-      }
-    };
-  }, [localFile, source]);
 
   return (
-    <div className="h-full flex flex-col bg-[#050505] rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
+    <div className="flex flex-col h-full bg-[#030303] text-white">
       <AnimatePresence mode="wait">
-        {showSetup ? (
+        {showUrlInput && !url ? (
           <motion.div
-            key="setup"
+            key="url-input"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.05 }}
             className="flex-1 flex flex-col items-center justify-center p-8 text-center"
           >
-            <div className="w-full max-w-md space-y-10">
-              <div className="space-y-4">
-                <div className="relative mx-auto w-24 h-24">
-                  <div className="absolute inset-0 bg-pink-500 blur-[40px] opacity-20 animate-pulse" />
-                  <div className="relative w-24 h-24 bg-gradient-to-br from-pink-600 to-rose-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl">
-                    <Music className="w-10 h-10 text-white" />
-                  </div>
-                </div>
-                <h2 className="text-4xl font-black uppercase italic tracking-tighter">Music Together</h2>
-                <p className="text-xs text-white/30 uppercase tracking-[0.3em] font-bold">Sonic Synchronization</p>
-              </div>
-
-              <div className="space-y-4">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                  accept="audio/*,video/*"
-                  className="hidden"
+            <div className="w-24 h-24 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl shadow-indigo-500/20">
+              <Music className="w-10 h-10 text-white" />
+            </div>
+            <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-2">Music Together</h2>
+            <p className="text-zinc-500 text-sm mb-8 max-w-xs">Paste a YouTube link to start listening synchronized with your partner.</p>
+            
+            <div className="w-full max-w-md space-y-4">
+              <div className="relative group">
+                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-indigo-500 transition-colors" />
+                <Input
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="Paste YouTube Link..."
+                  className="h-16 bg-zinc-900/50 border-zinc-800 rounded-2xl pl-12 pr-4 focus:ring-2 ring-indigo-500/20 transition-all"
+                  onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
                 />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-16 bg-white/[0.03] border border-white/10 hover:bg-white/[0.08] hover:border-pink-500/30 rounded-2xl text-white font-black uppercase tracking-widest transition-all group"
-                >
-                  <Upload className="w-5 h-5 mr-3 group-hover:text-pink-400 transition-colors" />
-                  Upload Local Audio
-                </Button>
-
-                <div className="relative flex items-center gap-4">
-                  <div className="flex-1 h-px bg-white/5" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">Uplink</span>
-                  <div className="flex-1 h-px bg-white/5" />
-                </div>
-
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Link className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <Input
-                      value={urlInput}
-                      onChange={(e) => setUrlInput(e.target.value)}
-                      placeholder="YouTube, SoundCloud or MP3 Link..."
-                      className="h-14 bg-white/[0.02] border-white/10 rounded-2xl pl-12 text-sm placeholder:text-white/20 focus:border-pink-500/50 transition-all"
-                      onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleUrlSubmit}
-                    disabled={!urlInput.trim()}
-                    className="w-full h-12 bg-gradient-to-r from-pink-600 to-rose-600 hover:opacity-90 rounded-2xl font-black uppercase tracking-widest disabled:opacity-30"
-                  >
-                    Load Stream
-                  </Button>
-                </div>
               </div>
-
-              <div className="flex items-center justify-center gap-8 pt-4">
-                <div className="flex flex-col items-center gap-2">
-                    <Headphones className="w-4 h-4 text-white/10" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Hi-Fi</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                    <Mic2 className="w-4 h-4 text-white/10" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Low Latency</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                    <Disc className="w-4 h-4 text-white/10" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-white/20">Universal</span>
-                </div>
-              </div>
+              <Button 
+                onClick={handleUrlSubmit}
+                disabled={!urlInput.trim()}
+                className="w-full h-16 bg-indigo-600 hover:bg-indigo-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-indigo-900/20"
+              >
+                Start Session
+              </Button>
             </div>
           </motion.div>
         ) : (
@@ -203,155 +169,158 @@ export function MusicTogether({ onClose }: MusicTogetherProps) {
             key="player"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col relative"
+            className="flex-1 flex flex-col relative overflow-hidden"
           >
+            {/* Background Aura */}
             <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-gradient-to-br from-pink-600/5 via-transparent to-rose-600/5" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] aspect-square bg-pink-500/5 blur-[120px] rounded-full animate-pulse" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] bg-indigo-600/10 blur-[150px] rounded-full animate-pulse" />
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-8 z-10">
-                <div className="relative">
-                    <motion.div 
-                        animate={{ 
-                            rotate: isPlaying ? 360 : 0,
-                            scale: isPlaying ? [1, 1.02, 1] : 1
-                        }}
-                        transition={{ 
-                            rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-                            scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
-                        }}
-                        className="w-48 h-48 sm:w-64 sm:h-64 rounded-full border-8 border-white/5 bg-gradient-to-br from-zinc-900 to-black flex items-center justify-center shadow-[0_0_100px_rgba(219,39,119,0.1)] relative"
-                    >
-                        <div className="absolute inset-4 rounded-full border-2 border-white/5 border-dashed animate-spin-slow" />
-                        <Disc className={`w-20 h-20 sm:w-24 sm:h-24 ${isPlaying ? 'text-pink-500' : 'text-white/20'} transition-colors duration-1000`} />
-                        
-                        <div className="absolute -bottom-2 -right-2 w-16 h-16 bg-zinc-900 rounded-2xl border border-white/10 flex items-center justify-center shadow-xl">
-                            {ReactPlayer.canPlay(source) ? (
-                                source.includes('youtube.com') || source.includes('youtu.be') ? (
-                                    <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-[10px] font-black text-white">YT</div>
-                                ) : (
-                                    <Music className="w-8 h-8 text-pink-500" />
-                                )
-                            ) : (
-                                <Disc className="w-8 h-8 text-white/40" />
-                            )}
-                        </div>
-                    </motion.div>
-                    
-                    {/* Visualizer bars mock */}
-                    <div className="absolute -inset-10 flex items-center justify-between pointer-events-none opacity-20">
-                        {[...Array(12)].map((_, i) => (
-                            <motion.div
-                                key={i}
-                                animate={{ height: isPlaying ? [10, 40, 10] : 10 }}
-                                transition={{ duration: 0.5 + Math.random(), repeat: Infinity, delay: Math.random() }}
-                                className="w-1 bg-pink-500 rounded-full"
-                            />
-                        ))}
-                    </div>
-                </div>
-
-                <div className="mt-12 text-center space-y-2 max-w-md">
-                    <h3 className="text-xl font-black uppercase italic tracking-tight truncate">
-                        {localFile?.name || (source.includes('youtube') ? "YouTube Stream" : "Audio Link")}
-                    </h3>
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30">
-                        {isPlaying ? "Synchronized Stream Active" : "Stream Paused"}
-                    </p>
-                </div>
-
-                <div className="w-full max-w-md mt-12 space-y-8">
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-mono text-white/40 w-12 text-right">{formatTime(currentTime)}</span>
-                            <Slider
-                                value={[currentTime]}
-                                max={duration || 100}
-                                step={0.1}
-                                onValueChange={handleSeek}
-                                className="flex-1"
-                            />
-                            <span className="text-[10px] font-mono text-white/40 w-12">{formatTime(duration)}</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-center gap-10">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => skip(-10)}
-                                className="h-12 w-12 rounded-full text-white/40 hover:text-white hover:bg-white/5"
-                            >
-                                <Rewind className="w-6 h-6" />
-                            </Button>
-                            
-                            <Button
-                                onClick={togglePlay}
-                                className="h-20 w-20 rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all shadow-2xl"
-                            >
-                                {isPlaying ? (
-                                    <Pause className="w-8 h-8 fill-black" />
-                                ) : (
-                                    <Play className="w-8 h-8 fill-black ml-1" />
-                                )}
-                            </Button>
-                            
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => skip(10)}
-                                className="h-12 w-12 rounded-full text-white/40 hover:text-white hover:bg-white/5"
-                            >
-                                <FastForward className="w-6 h-6" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                        <div className="flex items-center gap-4 flex-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={toggleMute}
-                                className="h-10 w-10 rounded-xl text-white/40 hover:text-white"
-                            >
-                                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                            </Button>
-                            <div className="w-24">
-                                <Slider
-                                    value={[isMuted ? 0 : volume]}
-                                    max={1}
-                                    step={0.01}
-                                    onValueChange={handleVolumeChange}
-                                />
-                            </div>
-                        </div>
-
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={resetPlayer}
-                            className="h-10 w-10 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-500/10"
-                        >
-                            <X className="w-5 h-5" />
-                        </Button>
-                    </div>
-                </div>
-            </div>
-
+            {/* Hidden Player */}
             <div className="hidden">
-                <ReactPlayer
-                    ref={playerRef}
-                    url={source}
-                    playing={isPlaying}
-                    volume={volume}
-                    muted={isMuted}
-                    playbackRate={playbackRate}
-                    onProgress={handleProgress}
-                    onDuration={handleDuration}
-                    onEnded={() => setIsPlaying(false)}
-                />
+              <ReactPlayer
+                ref={playerRef}
+                url={url}
+                playing={playing}
+                volume={volume}
+                muted={muted}
+                onProgress={handleProgress}
+                onDuration={handleDuration}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+              />
+            </div>
+
+            {/* Visualizer / UI */}
+            <div className="flex-1 flex flex-col items-center justify-center p-8 relative z-10">
+              <div className="relative mb-12">
+                <motion.div
+                  animate={{ rotate: playing ? 360 : 0 }}
+                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                  className="w-64 h-64 sm:w-80 sm:h-80 rounded-full border-8 border-zinc-900 shadow-2xl relative overflow-hidden bg-zinc-800"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-500/20" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Disc className="w-32 h-32 text-zinc-900 opacity-20" />
+                  </div>
+                  {/* Inner ring */}
+                  <div className="absolute inset-[35%] rounded-full border-4 border-zinc-900/50 bg-zinc-900 flex items-center justify-center">
+                    <div className="w-4 h-4 rounded-full bg-zinc-800 border-2 border-zinc-700" />
+                  </div>
+                </motion.div>
+                
+                {/* Visualizer Bars (Simplified) */}
+                <div className="absolute -inset-8 flex items-center justify-center gap-1 opacity-40">
+                   {[...Array(12)].map((_, i) => (
+                     <motion.div
+                       key={i}
+                       animate={{ 
+                         height: playing ? [10, 40, 20, 50, 10] : 10 
+                       }}
+                       transition={{ 
+                         duration: 0.8, 
+                         repeat: Infinity, 
+                         delay: i * 0.1,
+                         ease: "easeInOut" 
+                       }}
+                       className="w-1.5 bg-indigo-500 rounded-full"
+                     />
+                   ))}
+                </div>
+              </div>
+
+              <div className="text-center space-y-2 mb-12">
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter">Now Playing</h3>
+                <p className="text-indigo-400 font-bold text-sm truncate max-w-xs uppercase tracking-widest">
+                  {url.includes("youtube.com") ? "YouTube Stream" : "Audio Track"}
+                </p>
+              </div>
+
+              {/* Controls */}
+              <div className="w-full max-w-md space-y-8">
+                <div className="space-y-4">
+                  <Slider
+                    value={[played]}
+                    max={duration}
+                    step={1}
+                    onValueChange={handleSeekChange}
+                    onValueCommit={handleSeekMouseUp}
+                    className="cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                    <span>{formatTime(played)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-8">
+                  <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-white">
+                    <SkipBack className="w-6 h-6" />
+                  </Button>
+                  <Button 
+                    onClick={handlePlayPause}
+                    size="icon" 
+                    className="w-20 h-20 rounded-full bg-white text-black hover:bg-zinc-200 shadow-2xl shadow-white/10"
+                  >
+                    {playing ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-white">
+                    <SkipForward className="w-6 h-6" />
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-4 px-8">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setMuted(!muted)}
+                    className="text-zinc-500 hover:text-white"
+                  >
+                    {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                  </Button>
+                  <Slider
+                    value={[muted ? 0 : volume]}
+                    max={1}
+                    step={0.01}
+                    onValueChange={(v) => {
+                      setVolume(v[0]);
+                      setMuted(v[0] === 0);
+                    }}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Toolbar */}
+            <div className="p-6 border-t border-white/5 flex items-center justify-between bg-zinc-900/30 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/10 rounded-xl">
+                  <Disc className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Mode</p>
+                   <p className="text-xs font-bold uppercase">{contact ? `Party with ${contact.username}` : "Solo Session"}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setShowUrlInput(true)}
+                  className="rounded-xl bg-white/5 hover:bg-white/10"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setUrl("")}
+                  className="rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}

@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-import ReactPlayer from "react-player";
 import {
   Video as VideoIcon,
   Phone,
@@ -25,15 +24,19 @@ import {
   Link,
   Upload,
   X,
-  Rewind,
-  FastForward,
+  SkipBack,
+  SkipForward,
+  Settings,
   MonitorPlay,
   Users,
   MessageCircle,
   Send,
+  ChevronDown,
   ChevronUp,
-  ShieldCheck,
-  Music
+  MoreVertical,
+  Rewind,
+  FastForward,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,10 +50,9 @@ interface WatchPartyProps {
   privateKey: CryptoKey;
   isInitiator?: boolean;
   incomingSignal?: any;
-  mode?: "cinema" | "music";
 }
 
-export function WatchParty({ contact, onClose, userId, privateKey, isInitiator = true, incomingSignal, mode = "cinema" }: WatchPartyProps) {
+export function WatchParty({ contact, onClose, userId, privateKey, isInitiator = true, incomingSignal }: WatchPartyProps) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -58,6 +60,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const [isConnecting, setIsConnecting] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState("Initializing...");
   const [callDuration, setCallDuration] = useState(0);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -75,6 +78,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const [chatInput, setChatInput] = useState("");
   const [receivingVideo, setReceivingVideo] = useState(false);
   const [videoReceiveProgress, setVideoReceiveProgress] = useState(0);
+  const [totalVideoSize, setTotalVideoSize] = useState(0);
   const [sendingVideo, setSendingVideo] = useState(false);
   const [videoSendProgress, setVideoSendProgress] = useState(0);
   const [videosExpanded, setVideosExpanded] = useState(true);
@@ -82,7 +86,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const myVideo = useRef<HTMLVideoElement>(null);
   const userVideo = useRef<HTMLVideoElement>(null);
   const remoteAudio = useRef<HTMLAudioElement>(null);
-  const playerRef = useRef<ReactPlayer>(null);
+  const movieVideo = useRef<HTMLVideoElement>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -195,6 +199,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
       const encrypted = await encryptMessage(JSON.stringify(data), partnerPublicKeyRef.current);
       return JSON.stringify({ encrypted });
     } catch (e) {
+      console.error("Encryption failed", e);
       return JSON.stringify(data);
     }
   };
@@ -208,6 +213,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
       }
       return parsed;
     } catch (e) {
+      console.error("Decryption failed", e);
       return JSON.parse(signalStr);
     }
   };
@@ -270,10 +276,10 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
       }
       
       sendSyncMessage("videoEnd", {});
-      toast.success("File shared with partner!");
+      toast.success("Video shared with partner!");
     } catch (err) {
-      console.error("File transfer failed:", err);
-      toast.error("Sharing interrupted");
+      console.error("Video transfer failed:", err);
+      toast.error("Video sharing interrupted");
     } finally {
       setSendingVideo(false);
     }
@@ -292,11 +298,12 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
       const data = JSON.parse(event.data);
       if (data.action === "videoStart") {
         setReceivingVideo(true);
+        setTotalVideoSize(data.totalSize);
         expectedChunksRef.current = data.totalChunks;
         videoChunksRef.current = [];
         receivedChunksCountRef.current = 0;
         setVideoReceiveProgress(0);
-        toast.info(`Receiving ${mode === 'music' ? 'music' : 'video'}: ${data.fileName}`);
+        toast.info(`Receiving video: ${data.fileName}`);
       } else if (data.action === "videoEnd") {
         const blob = new Blob(videoChunksRef.current, { type: 'video/mp4' });
         const url = URL.createObjectURL(blob);
@@ -304,15 +311,17 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
         setShowVideoSetup(false);
         setReceivingVideo(false);
         videoChunksRef.current = [];
-        toast.success("Received! Ready to play.");
-      } else if (data.action === "play") {
-        playerRef.current?.seekTo(data.time);
+        toast.success("Video received! Ready to play.");
+      } else if (data.action === "play" && movieVideo.current) {
+        movieVideo.current.currentTime = data.time;
+        movieVideo.current.play().catch(e => console.error("Auto-play failed:", e));
         setIsPlaying(true);
-      } else if (data.action === "pause") {
-        playerRef.current?.seekTo(data.time);
+      } else if (data.action === "pause" && movieVideo.current) {
+        movieVideo.current.currentTime = data.time;
+        movieVideo.current.pause();
         setIsPlaying(false);
-      } else if (data.action === "seek") {
-        playerRef.current?.seekTo(data.time);
+      } else if (data.action === "seek" && movieVideo.current) {
+        movieVideo.current.currentTime = data.time;
       } else if (data.action === "url" && data.url) {
         setMovieUrl(data.url);
         setShowVideoSetup(false);
@@ -327,7 +336,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
     } catch (e) {
       console.error("Failed to parse data channel message:", e);
     }
-  }, [contact.username, mode]);
+  }, [contact.username]);
 
   const createPeerConnection = useCallback(
     (localStream: MediaStream) => {
@@ -556,29 +565,47 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   };
 
   const handlePlayPause = () => {
-    const newPlaying = !isPlaying;
-    setIsPlaying(newPlaying);
-    const time = playerRef.current?.getCurrentTime() || 0;
-    sendSyncMessage(newPlaying ? "play" : "pause", { time });
+    if (movieVideo.current) {
+      if (isPlaying) {
+        movieVideo.current.pause();
+        sendSyncMessage("pause", { time: movieVideo.current.currentTime });
+        setIsPlaying(false);
+      } else {
+        movieVideo.current.play().catch(e => console.error("Play failed:", e));
+        sendSyncMessage("play", { time: movieVideo.current.currentTime });
+        setIsPlaying(true);
+      }
+    }
   };
 
   const handleSeek = (value: number[]) => {
-    playerRef.current?.seekTo(value[0]);
-    sendSyncMessage("seek", { time: value[0] });
+    if (movieVideo.current) {
+      movieVideo.current.currentTime = value[0];
+      sendSyncMessage("seek", { time: value[0] });
+    }
   };
 
-  const handleProgress = (state: { playedSeconds: number }) => {
-    setCurrentTime(state.playedSeconds);
+  const handleVolumeChange = (value: number[]) => {
+    if (movieVideo.current) {
+      movieVideo.current.volume = value[0];
+      setVolume(value[0]);
+    }
   };
 
-  const handleDuration = (d: number) => {
-    setDuration(d);
+  const handleTimeUpdate = () => {
+    if (movieVideo.current) setCurrentTime(movieVideo.current.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    if (movieVideo.current) setDuration(movieVideo.current.duration);
   };
 
   const skip = (seconds: number) => {
-    const newTime = currentTime + seconds;
-    playerRef.current?.seekTo(newTime);
-    sendSyncMessage("seek", { time: newTime });
+    if (movieVideo.current) {
+      const newTime = movieVideo.current.currentTime + seconds;
+      movieVideo.current.currentTime = Math.max(0, Math.min(newTime, duration));
+      sendSyncMessage("seek", { time: movieVideo.current.currentTime });
+    }
   };
 
   const toggleFullscreen = () => {
@@ -638,18 +665,18 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                 className="w-full max-w-lg bg-zinc-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 backdrop-blur-xl space-y-6"
               >
                 <div className="text-center space-y-2">
-                  <div className={`inline-flex p-3 sm:p-4 rounded-2xl mb-2 sm:mb-4 ${mode === 'music' ? 'bg-pink-600/20' : 'bg-indigo-600/20'}`}>
-                    {mode === 'music' ? <Music className="w-8 h-8 sm:w-10 sm:h-10 text-pink-400" /> : <MonitorPlay className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-400" />}
+                  <div className="inline-flex p-3 sm:p-4 bg-indigo-600/20 rounded-2xl mb-2 sm:mb-4">
+                    <MonitorPlay className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-400" />
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter">{mode === 'music' ? 'Music Together' : 'Cinema Together'}</h2>
+                  <h2 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter">Watch Party</h2>
                   <div className="flex items-center justify-center gap-2 mb-2 sm:mb-4">
                     <ShieldCheck className="w-4 h-4 text-emerald-500" />
                     <p className="text-emerald-400 font-bold uppercase tracking-widest text-[8px]">E2E Encrypted</p>
                   </div>
                   <p className="text-xs sm:text-sm text-white/40 font-medium">
                     {isInitiator 
-                      ? `Select ${mode === 'music' ? 'music' : 'a movie'} to watch together with ${contact.username}`
-                      : `Waiting for ${contact.username} to select...`
+                      ? `Select a movie to watch together with ${contact.username}`
+                      : `Waiting for ${contact.username} to select a movie...`
                     }
                   </p>
                 </div>
@@ -673,14 +700,14 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                 {receivingVideo ? (
                   <div className="space-y-4">
                     <div className="text-center space-y-2">
-                      <div className={`inline-flex p-3 rounded-xl animate-pulse ${mode === 'music' ? 'bg-pink-600/20' : 'bg-indigo-600/20'}`}>
-                        {mode === 'music' ? <Music className="w-6 h-6 sm:w-8 sm:h-8 text-pink-400" /> : <Film className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-400" />}
+                      <div className="inline-flex p-3 bg-indigo-600/20 rounded-xl animate-pulse">
+                        <Film className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-400" />
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white/60">Receiving from {contact.username}...</p>
+                      <p className="text-xs sm:text-sm font-bold text-white/60">Receiving video from {contact.username}...</p>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2 sm:h-3 overflow-hidden">
                       <motion.div 
-                        className={`h-full bg-gradient-to-r ${mode === 'music' ? 'from-pink-500 to-rose-500' : 'from-indigo-500 to-purple-500'}`}
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
                         initial={{ width: 0 }}
                         animate={{ width: `${videoReceiveProgress}%` }}
                         transition={{ duration: 0.3 }}
@@ -694,7 +721,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                       <div className="inline-flex p-3 bg-emerald-600/20 rounded-xl animate-pulse">
                         <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-400" />
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white/60">Sending to {contact.username}...</p>
+                      <p className="text-xs sm:text-sm font-bold text-white/60">Sending video to {contact.username}...</p>
                     </div>
                     <div className="w-full bg-white/10 rounded-full h-2 sm:h-3 overflow-hidden">
                       <motion.div 
@@ -711,17 +738,17 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                     <input
                       type="file"
                       ref={fileInputRef}
-                      accept={mode === 'music' ? 'audio/*,video/*' : 'video/*'}
+                      accept="video/*"
                       onChange={handleFileSelect}
                       className="hidden"
                     />
                     <Button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isConnecting}
-                      className={`w-full h-12 sm:h-14 bg-gradient-to-r ${mode === 'music' ? 'from-pink-600 to-rose-600' : 'from-indigo-600 to-purple-600'} hover:opacity-90 rounded-2xl font-black uppercase text-[10px] sm:text-xs tracking-widest gap-2 sm:gap-3 disabled:opacity-50`}
+                      className="w-full h-12 sm:h-14 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-2xl font-black uppercase text-[10px] sm:text-xs tracking-widest gap-2 sm:gap-3 disabled:opacity-50"
                     >
                       <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
-                      Upload {mode === 'music' ? 'Audio' : 'Video'} File
+                      Upload Local File
                     </Button>
 
                     <div className="relative">
@@ -737,7 +764,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                       <div className="relative flex-1">
                         <Link className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
                         <Input
-                          placeholder={`Paste YouTube or ${mode === 'music' ? 'audio' : 'video'} URL...`}
+                          placeholder="Paste video URL..."
                           value={movieUrl}
                           onChange={(e) => setMovieUrl(e.target.value)}
                           className="pl-10 sm:pl-12 h-12 sm:h-14 bg-white/5 border-white/10 rounded-2xl text-sm"
@@ -746,7 +773,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                       <Button
                         onClick={handleUrlSubmit}
                         disabled={!movieUrl.trim() || isConnecting}
-                        className={`h-12 sm:h-14 px-6 ${mode === 'music' ? 'bg-pink-600' : 'bg-emerald-600'} hover:opacity-90 rounded-2xl font-black uppercase text-xs`}
+                        className="h-12 sm:h-14 px-6 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-black uppercase text-xs"
                       >
                         Play
                       </Button>
@@ -755,12 +782,12 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                 ) : (
                   <div className="space-y-4 text-center py-6 sm:py-8">
                     <div className="inline-flex p-3 sm:p-4 bg-white/5 rounded-2xl animate-pulse">
-                      {mode === 'music' ? <Music className="w-10 h-10 sm:w-12 sm:h-12 text-white/30" /> : <Film className="w-10 h-10 sm:w-12 sm:h-12 text-white/30" />}
+                      <Film className="w-10 h-10 sm:w-12 sm:h-12 text-white/30" />
                     </div>
                     <p className="text-xs sm:text-sm text-white/40 font-medium">
                       {isConnecting 
-                        ? "Connecting..."
-                        : `${contact.username} will select ${mode === 'music' ? 'music' : 'a video'}`
+                        ? "Connecting to watch party..."
+                        : `${contact.username} will select a video to watch together`
                       }
                     </p>
                   </div>
@@ -825,42 +852,16 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
           </div>
       ) : (
         <>
-          <div className="w-full h-full relative">
-            <ReactPlayer
-              ref={playerRef}
-              url={localMovieUrl || movieUrl}
-              width="100%"
-              height="100%"
-              playing={isPlaying}
-              volume={volume}
-              onProgress={handleProgress}
-              onDuration={handleDuration}
-              config={{
-                youtube: {
-                  playerVars: { showinfo: 0, modestbranding: 1 }
-                }
-              }}
-              style={{ position: 'absolute', top: 0, left: 0 }}
-            />
-            {mode === 'music' && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <motion.div 
-                  animate={{ 
-                    scale: isPlaying ? [1, 1.1, 1] : 1,
-                    rotate: isPlaying ? 360 : 0
-                  }}
-                  transition={{ 
-                    duration: 10, 
-                    repeat: Infinity, 
-                    ease: "linear" 
-                  }}
-                  className="w-48 h-48 sm:w-64 sm:h-64 rounded-full border-8 border-white/10 flex items-center justify-center bg-gradient-to-br from-pink-600/20 to-rose-600/20 backdrop-blur-3xl"
-                >
-                  <Music className={`w-20 h-20 sm:w-24 sm:h-24 ${isPlaying ? 'text-pink-500' : 'text-white/20'}`} />
-                </motion.div>
-              </div>
-            )}
-          </div>
+          <video
+            ref={movieVideo}
+            src={localMovieUrl || movieUrl}
+            className="w-full h-full object-contain bg-black"
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            playsInline
+          />
 
           <div className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 z-20">
             <motion.div className="flex items-start gap-2" initial={false}>
@@ -935,8 +936,8 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
               >
                 <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 pointer-events-auto z-10">
                   <div className="bg-black/60 backdrop-blur-xl px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/10 flex items-center gap-2 sm:gap-3">
-                    {mode === 'music' ? <Music className="w-3 h-3 sm:w-4 sm:h-4 text-pink-400" /> : <Film className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-400" />}
-                    <span className="text-[10px] sm:text-xs font-bold text-white/60">{mode === 'music' ? 'Music Party' : 'Watch Party'}</span>
+                    <Film className="w-3 h-3 sm:w-4 sm:h-4 text-indigo-400" />
+                    <span className="text-[10px] sm:text-xs font-bold text-white/60">Watch Party</span>
                     <ShieldCheck className="w-3 h-3 text-emerald-500" />
                   </div>
                 </div>
@@ -944,7 +945,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-auto">
                   <div className="flex items-center gap-3 sm:gap-6">
                     <Button onClick={() => skip(-10)} size="icon" variant="ghost" className="h-10 w-10 sm:h-14 sm:w-14 rounded-full bg-white/10 hover:bg-white/20"><Rewind className="w-5 h-5 sm:w-6 sm:h-6" /></Button>
-                    <Button onClick={handlePlayPause} size="icon" className={`h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10`}>{isPlaying ? <Pause className="w-7 h-7 sm:w-10 sm:h-10" /> : <Play className="w-7 h-7 sm:w-10 sm:h-10 ml-1" />}</Button>
+                    <Button onClick={handlePlayPause} size="icon" className="h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10">{isPlaying ? <Pause className="w-7 h-7 sm:w-10 sm:h-10" /> : <Play className="w-7 h-7 sm:w-10 sm:h-10 ml-1" />}</Button>
                     <Button onClick={() => skip(10)} size="icon" variant="ghost" className="h-10 w-10 sm:h-14 sm:w-14 rounded-full bg-white/10 hover:bg-white/20"><FastForward className="w-5 h-5 sm:w-6 sm:h-6" /></Button>
                   </div>
                 </div>
@@ -964,7 +965,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
                     </div>
 
                     <div className="flex items-center gap-1 sm:gap-2">
-                      {isInitiator && <Button onClick={() => setShowVideoSetup(true)} size="icon" variant="ghost" className="h-9 w-9 sm:h-10 sm:w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10">{mode === 'music' ? <Music className="w-4 h-4" /> : <Film className="w-4 h-4" />}</Button>}
+                      {isInitiator && <Button onClick={() => setShowVideoSetup(true)} size="icon" variant="ghost" className="h-9 w-9 sm:h-10 sm:w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10"><Film className="w-4 h-4" /></Button>}
                       <Button onClick={() => setShowChat(!showChat)} size="icon" variant="ghost" className={`h-9 w-9 sm:h-10 sm:w-10 rounded-full ${showChat ? "bg-indigo-500/20 text-indigo-400" : "text-white/60 hover:text-white hover:bg-white/10"}`}><MessageCircle className="w-4 h-4" /></Button>
                       <Button onClick={toggleFullscreen} size="icon" variant="ghost" className="h-9 w-9 sm:h-10 sm:w-10 rounded-full text-white/60 hover:text-white hover:bg-white/10 hidden sm:flex">{isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}</Button>
                       <Button onClick={endCall} size="icon" className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-red-500 hover:bg-red-600 ml-1 sm:ml-2"><PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" /></Button>
