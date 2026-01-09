@@ -19,6 +19,7 @@ import { Stories } from "@/components/Stories";
 import { ProfileSettings } from "@/components/ProfileSettings";
 import { VideoCall } from "@/components/VideoCall";
 import { WatchParty } from "@/components/WatchParty";
+import { MusicTogether } from "@/components/MusicTogether";
 import { SpecialDays } from "@/components/SpecialDays";
 import { PrivateSafe } from "@/components/PrivateSafe";
 import { PasswordGate } from "@/components/PasswordGate";
@@ -72,11 +73,9 @@ function formatNotificationTime(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-  export function UserDashboardView({ session, privateKey }: UserDashboardViewProps) {
-    const router = useRouter();
-    const isMounted = useRef(true);
-    const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-
+export function UserDashboardView({ session, privateKey }: UserDashboardViewProps) {
+  const router = useRouter();
+  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [isChatUnlocked, setIsChatUnlocked] = useState(false);
   const [myProfile, setMyProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -87,13 +86,14 @@ function formatNotificationTime(date: Date): string {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeCall, setActiveCall] = useState<any>(null);
-  const [activeWatchParty, setActiveWatchParty] = useState<any>(null);
-  const [incomingCall, setIncomingCall] = useState<any>(null);
+    const [activeWatchParty, setActiveWatchParty] = useState<any>(null);
+    const [activeMusicTogether, setActiveMusicTogether] = useState<any>(null);
+    const [incomingCall, setIncomingCall] = useState<any>(null);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [friends, setFriends] = useState<string[]>([]);
   const [friendProfiles, setFriendProfiles] = useState<any[]>([]);
-  const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "memories">("menu");
+  const [advancedSubView, setAdvancedSubView] = useState<"menu" | "vault" | "cinema" | "cinema-solo" | "memories" | "music-together">("menu");
   const [friendSearchQuery, setFriendSearchQuery] = useState("");
   const [showFriendSearch, setShowFriendSearch] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -108,15 +108,7 @@ function formatNotificationTime(date: Date): string {
   const notificationSound = useRef<HTMLAudioElement | null>(null);
   const presenceChannelRef = useRef<any>(null);
 
-    useEffect(() => {
-      isMounted.current = true;
-      return () => {
-        isMounted.current = false;
-      };
-    }, []);
-
-    async function clearAllChats() {
-
+  async function clearAllChats() {
     setShowClearConfirm(true);
     setShowMoreMenu(false);
   }
@@ -424,7 +416,6 @@ function formatNotificationTime(date: Date): string {
 
   function setupRealtimeSubscriptions() {
     const broadcastsChannel = supabase.channel("global-broadcasts").on("postgres_changes", { event: "INSERT", schema: "public", table: "broadcasts" }, (payload) => {
-      if (!isMounted.current) return;
       setBroadcasts([payload.new]);
       toast.info("Global Broadcast Received", { description: payload.new.content });
       showNotification("Global Broadcast", { body: payload.new.content });
@@ -432,7 +423,6 @@ function formatNotificationTime(date: Date): string {
     }).subscribe();
 
     const messagesChannel = supabase.channel("dashboard-messages").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${session.user.id}` }, async (payload) => {
-      if (!isMounted.current) return;
       fetchRecentChats();
       fetchUnreadCount();
       const { data: sender } = await supabase.from("profiles").select("username").eq("id", payload.new.sender_id).single();
@@ -442,11 +432,10 @@ function formatNotificationTime(date: Date): string {
     }).subscribe();
 
     const callsChannel = supabase.channel("incoming-calls").on("postgres_changes", { event: "INSERT", schema: "public", table: "calls", filter: `receiver_id=eq.${session.user.id}` }, async (payload) => {
-      if (!isMounted.current) return;
       const data = payload.new;
       if (data.type === "offer" && !activeCall && !incomingCall) {
         const { data: caller } = await supabase.from("profiles").select("*").eq("id", data.caller_id).single();
-        if (caller && isMounted.current) {
+        if (caller) {
           setIncomingCall({ ...data, caller });
           toast.info(`Incoming ${data.call_mode} call from ${caller.username}`, { duration: 10000 });
           showNotification(`Incoming ${data.call_mode} call`, { body: `Call from ${caller.username}` });
@@ -456,10 +445,9 @@ function formatNotificationTime(date: Date): string {
     }).subscribe();
 
     const storiesChannel = supabase.channel("new-stories").on("postgres_changes", { event: "INSERT", schema: "public", table: "stories" }, async (payload) => {
-      if (!isMounted.current) return;
       if (payload.new.user_id !== session.user.id) {
         const { data: creator } = await supabase.from("profiles").select("username").eq("id", payload.new.user_id).single();
-        if (creator && isMounted.current) {
+        if (creator) {
           toast.info(`New story from ${creator.username}`);
           showNotification("New Story", { body: `${creator.username} shared a new snapshot.` });
           addNotification("story", "New Story", `${creator.username} shared a new story`, { userId: payload.new.user_id });
@@ -468,13 +456,12 @@ function formatNotificationTime(date: Date): string {
     }).subscribe();
 
     const friendRequestsChannel = supabase.channel("friend-requests-notifications").on("postgres_changes", { event: "*", schema: "public", table: "friend_requests" }, async (payload) => {
-      if (!isMounted.current) return;
       fetchPendingFriendRequests();
       fetchFriends();
       fetchFriendRequests();
       if (payload.eventType === "INSERT" && payload.new.receiver_id === session.user.id) {
         const { data: sender } = await supabase.from("profiles").select("username").eq("id", payload.new.sender_id).single();
-        if (sender && isMounted.current) {
+        if (sender) {
           toast.info(`${sender.username} sent you a friend request`);
           showNotification("Friend Request", { body: `${sender.username} wants to connect with you` });
           addNotification("friend_request", "Friend Request", `${sender.username} wants to be your friend`, { senderId: payload.new.sender_id });
@@ -483,7 +470,6 @@ function formatNotificationTime(date: Date): string {
     }).subscribe();
 
     const presenceChannel = supabase.channel("online-users").on("presence", { event: "sync" }, () => {
-      if (!isMounted.current) return;
       const state = presenceChannel.presenceState();
       const online = new Set<string>();
       Object.values(state).forEach((users: any) => { users.forEach((u: any) => online.add(u.user_id)); });
@@ -538,10 +524,11 @@ function formatNotificationTime(date: Date): string {
   ];
 
 const advancedFeatures = [
-      { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
-      { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
-      { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
-    ];
+        { id: "vault", icon: Shield, label: "Vault", desc: "Private secure storage", color: "from-violet-600 to-purple-600" },
+        { id: "cinema", icon: Film, label: "Cinema", desc: "Watch movies together", color: "from-purple-600 to-indigo-600" },
+        { id: "music-together", icon: Music, label: "Music Together", desc: "Watch YouTube in sync", color: "from-blue-600 to-indigo-600" },
+        { id: "memories", icon: CalendarHeart, label: "Memories", desc: "Special days calendar", color: "from-pink-600 to-rose-600" },
+      ];
 
   const filteredFriendResults = profiles.filter(p =>
     p.username?.toLowerCase().includes(friendSearchQuery.toLowerCase())
@@ -1275,7 +1262,41 @@ const advancedFeatures = [
                   </div>
                 )}
 
-                {advancedSubView === "memories" && !selectedFriendForMemories && (
+                  {advancedSubView === "music-together" && (
+                    <div className="p-6 sm:p-8 pb-32 lg:pb-12">
+                      <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
+                        <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
+                      </Button>
+                      <div className="mb-8">
+                        <h2 className="text-2xl font-black uppercase italic mb-2">Music Together</h2>
+                        <p className="text-sm text-white/40">Watch YouTube videos or listen to music with friends in perfect sync</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {friendProfiles.map(p => (
+                          <div key={p.id} className="p-6 bg-gradient-to-br from-blue-900/20 to-indigo-900/20 border border-white/5 rounded-3xl flex flex-col items-center gap-4 hover:border-blue-500/30 transition-all group">
+                            <div className="cursor-pointer hover:scale-105 transition-transform relative" onClick={() => router.push(`/profile/${p.id}`)}>
+                              <AvatarDisplay profile={p} className="h-16 w-16" />
+                              <div className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 rounded-full">
+                                <Music className="w-3 h-3 text-white" />
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <p className="font-black text-lg uppercase cursor-pointer hover:text-blue-400 transition-colors" onClick={() => router.push(`/profile/${p.id}`)}>{p.username}</p>
+                              <p className={`text-[10px] font-bold uppercase tracking-widest ${onlineUsers.has(p.id) ? 'text-emerald-500' : 'text-white/20'}`}>
+                                {onlineUsers.has(p.id) ? 'Online' : formatLastSeen(p.last_seen)}
+                              </p>
+                            </div>
+                            <Button onClick={() => setActiveMusicTogether({ contact: p })} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 uppercase text-[10px] tracking-widest">
+                              <Music className="w-4 h-4 mr-2" /> Start Listening
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {advancedSubView === "memories" && !selectedFriendForMemories && (
                   <div className="p-6 sm:p-8 pb-32 lg:pb-12">
                     <Button variant="ghost" onClick={() => setAdvancedSubView("menu")} className="mb-6 text-white/40 hover:text-white">
                       <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Back to Advanced
@@ -1334,49 +1355,66 @@ const advancedFeatures = [
 
         <AnimatePresence>
           {activeCall && <VideoCall key="video-call" userId={session.user.id} privateKey={privateKey} contact={activeCall.contact} callType={activeCall.mode} isInitiator={activeCall.isInitiator} incomingSignal={activeCall.incomingSignal} onClose={() => setActiveCall(null)} />}
-          {activeWatchParty && (
-            <WatchParty 
-              key="watch-party"
-              userId={session.user.id} 
-              privateKey={privateKey}
-              contact={activeWatchParty.contact} 
-              isInitiator={activeWatchParty.isInitiator ?? true} 
-              incomingSignal={activeWatchParty.incomingSignal} 
-              onClose={() => setActiveWatchParty(null)} 
-            />
-          )}
-          {incomingCall && !activeCall && (
-            <motion.div key="incoming-call" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
-              <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-10 max-w-sm w-full text-center space-y-8">
-                <AvatarDisplay profile={incomingCall.caller} className="h-32 w-32 mx-auto" />
-                <h3 className="text-4xl font-black italic uppercase">{incomingCall.caller.username}</h3>
-                <p className="text-sm text-white/40 uppercase tracking-wider">
-                  {incomingCall.call_mode === "watchparty" ? "Watch Party" : `${incomingCall.call_mode} Call`}
-                </p>
-                <div className="flex gap-4">
-                  <Button onClick={() => setIncomingCall(null)} className="flex-1 bg-red-600 text-xs font-bold uppercase py-4 rounded-2xl">Decline</Button>
-                  <Button onClick={() => { 
-                    const signalData = JSON.parse(incomingCall.signal_data);
-                    if (incomingCall.call_mode === "watchparty") {
-                      setActiveWatchParty({ 
-                        contact: incomingCall.caller, 
-                        isInitiator: false, 
-                        incomingSignal: signalData 
-                      });
-                    } else {
-                      setActiveCall({ 
-                        contact: incomingCall.caller, 
-                        mode: incomingCall.call_mode, 
-                        isInitiator: false, 
-                        incomingSignal: signalData 
-                      });
-                    }
-                    setIncomingCall(null); 
-                  }} className="flex-1 bg-emerald-600 text-xs font-bold uppercase py-4 rounded-2xl">Accept</Button>
+            {activeWatchParty && (
+              <WatchParty 
+                key="watch-party"
+                userId={session.user.id} 
+                privateKey={privateKey}
+                contact={activeWatchParty.contact} 
+                isInitiator={activeWatchParty.isInitiator ?? true} 
+                incomingSignal={activeWatchParty.incomingSignal} 
+                onClose={() => setActiveWatchParty(null)} 
+              />
+            )}
+            {activeMusicTogether && (
+              <MusicTogether
+                key="music-together"
+                userId={session.user.id}
+                privateKey={privateKey}
+                contact={activeMusicTogether.contact}
+                isInitiator={activeMusicTogether.isInitiator ?? true}
+                incomingSignal={activeMusicTogether.incomingSignal}
+                onClose={() => setActiveMusicTogether(null)}
+              />
+            )}
+            {incomingCall && !activeCall && !activeWatchParty && !activeMusicTogether && (
+              <motion.div key="incoming-call" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+                <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-10 max-w-sm w-full text-center space-y-8">
+                  <AvatarDisplay profile={incomingCall.caller} className="h-32 w-32 mx-auto" />
+                  <h3 className="text-4xl font-black italic uppercase">{incomingCall.caller.username}</h3>
+                  <p className="text-sm text-white/40 uppercase tracking-wider">
+                    {incomingCall.call_mode === "watchparty" ? "Watch Party" : incomingCall.call_mode === "musictogether" ? "Music Together" : `${incomingCall.call_mode} Call`}
+                  </p>
+                  <div className="flex gap-4">
+                    <Button onClick={() => setIncomingCall(null)} className="flex-1 bg-red-600 text-xs font-bold uppercase py-4 rounded-2xl">Decline</Button>
+                    <Button onClick={() => { 
+                      const signalData = JSON.parse(incomingCall.signal_data);
+                      if (incomingCall.call_mode === "watchparty") {
+                        setActiveWatchParty({ 
+                          contact: incomingCall.caller, 
+                          isInitiator: false, 
+                          incomingSignal: signalData 
+                        });
+                      } else if (incomingCall.call_mode === "musictogether") {
+                        setActiveMusicTogether({ 
+                          contact: incomingCall.caller, 
+                          isInitiator: false, 
+                          incomingSignal: signalData 
+                        });
+                      } else {
+                        setActiveCall({ 
+                          contact: incomingCall.caller, 
+                          mode: incomingCall.call_mode, 
+                          isInitiator: false, 
+                          incomingSignal: signalData 
+                        });
+                      }
+                      setIncomingCall(null); 
+                    }} className="flex-1 bg-emerald-600 text-xs font-bold uppercase py-4 rounded-2xl">Accept</Button>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
         </AnimatePresence>
 
         <nav className={`lg:hidden fixed bottom-0 left-0 right-0 border-t border-white/5 bg-[#050505]/95 backdrop-blur-3xl px-2 py-3 flex justify-around items-center z-50 rounded-t-2xl pb-safe transition-all ${(activeView === 'chat' && selectedContact) ? 'translate-y-full' : ''}`}>

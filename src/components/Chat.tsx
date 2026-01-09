@@ -52,11 +52,9 @@ function formatLastSeen(lastSeen: string | null): string {
   return `Last seen ${dateStr} at ${timeStr}`;
 }
 
-  export function Chat({ session, privateKey, initialContact, isPartnerOnline, onBack, onInitiateCall, isFriend = true, onSendFriendRequest }: ChatProps) {
-    const router = useRouter();
-    const isMounted = useRef(true);
-    const [messages, setMessages] = useState<any[]>([]);
-
+export function Chat({ session, privateKey, initialContact, isPartnerOnline, onBack, onInitiateCall, isFriend = true, onSendFriendRequest }: ChatProps) {
+  const router = useRouter();
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [showOptions, setShowOptions] = useState(false);
@@ -116,19 +114,16 @@ function formatLastSeen(lastSeen: string | null): string {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      isMounted.current = true;
-      const handleBlur = () => setIsFocused(false);
-      const handleFocus = () => setIsFocused(true);
-      window.addEventListener("blur", handleBlur);
-      window.addEventListener("focus", handleFocus);
-      return () => {
-        isMounted.current = false;
-        window.removeEventListener("blur", handleBlur);
-        window.removeEventListener("focus", handleFocus);
-      };
-    }, []);
-
+  useEffect(() => {
+    const handleBlur = () => setIsFocused(false);
+    const handleFocus = () => setIsFocused(true);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
     useEffect(() => {
       async function initMyPublicKey() {
@@ -335,57 +330,33 @@ function formatLastSeen(lastSeen: string | null): string {
   }
 
   function subscribeToMessages() {
-    const channel = supabase.channel(`chat-events-${contactProfile.id}-${session.user.id}`)
+    return supabase.channel(`chat-events-${contactProfile.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, async (payload) => {
-        if (!isMounted.current) return;
-        
         if (payload.eventType === "INSERT") {
           const msg = payload.new;
           if (msg.sender_id === contactProfile.id || msg.receiver_id === contactProfile.id) {
-            // Only update if it's for us and not yet viewed
-            if (msg.receiver_id === session.user.id && !msg.is_viewed) {
-              supabase.from("messages").update({ 
-                is_delivered: true, 
-                delivered_at: new Date().toISOString(), 
-                is_viewed: true, 
-                viewed_at: new Date().toISOString() 
-              }).eq("id", msg.id).then(); // fire and forget to avoid async block here
+            if (msg.receiver_id === session.user.id) {
+              await supabase.from("messages").update({ is_delivered: true, delivered_at: new Date().toISOString(), is_viewed: true, viewed_at: new Date().toISOString() }).eq("id", msg.id);
             }
-            
             const decryptedContent = await decryptMessageContent(msg);
-            if (isMounted.current) {
-              setMessages(prev => {
-                if (prev.some(m => m.id === msg.id)) return prev;
-                return [...prev, { ...msg, decrypted_content: decryptedContent }];
-              });
-            }
+            setMessages(prev => {
+              if (prev.find(m => m.id === msg.id)) return prev;
+              return [...prev, { ...msg, decrypted_content: decryptedContent }];
+            });
           }
         } else if (payload.eventType === "UPDATE") {
-          if (isMounted.current) {
-            setMessages(prev => prev.map(m => {
-              if (m.id === payload.new.id) {
-                // If the update only changes status, keep our decrypted content
-                return { ...payload.new, decrypted_content: m.decrypted_content };
-              }
-              return m;
-            }));
-          }
+          setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...payload.new, decrypted_content: m.decrypted_content } : m));
         } else if (payload.eventType === "DELETE") {
-          if (isMounted.current) {
-            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-          }
+          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
         }
       })
       .subscribe();
-    return channel;
   }
 
   useEffect(() => {
     fetchMessages();
-    const channel = subscribeToMessages();
-    return () => { 
-      supabase.removeChannel(channel); 
-    };
+    const subscription = subscribeToMessages();
+    return () => { supabase.removeChannel(subscription); };
   }, [contactProfile.id]);
 
   useEffect(() => {
@@ -606,12 +577,7 @@ function formatLastSeen(lastSeen: string | null): string {
 
       const sentMsg = data?.[0] || messageData;
       sentMsg.decrypted_content = contentToEncrypt;
-      if (isMounted.current) {
-        setMessages(prev => {
-          if (prev.some(m => m.id === sentMsg.id)) return prev;
-          return [...prev, sentMsg];
-        });
-      }
+      setMessages(prev => [...prev, sentMsg]);
       setNewMessage("");
       setShowOptions(false);
     } catch (e: any) { 

@@ -68,6 +68,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const [movieUrl, setMovieUrl] = useState("");
   const [localMovieFile, setLocalMovieFile] = useState<File | null>(null);
   const [localMovieUrl, setLocalMovieUrl] = useState("");
+  const [isYoutube, setIsYoutube] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -87,6 +88,7 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const userVideo = useRef<HTMLVideoElement>(null);
   const remoteAudio = useRef<HTMLAudioElement>(null);
   const movieVideo = useRef<HTMLVideoElement>(null);
+  const ytPlayerRef = useRef<any>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<any>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -101,188 +103,43 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
   const expectedChunksRef = useRef<number>(0);
   const receivedChunksCountRef = useRef<number>(0);
   const partnerPublicKeyRef = useRef<CryptoKey | null>(null);
+  const isSyncing = useRef(false);
 
-  useEffect(() => {
-    if (myVideo.current && stream) {
-      myVideo.current.srcObject = stream;
-      myVideo.current.play().catch((e) => console.error("My video play failed:", e));
-    }
-  }, [stream, showVideoSetup, videosExpanded]);
+  const getYoutubeId = (url: string) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
 
-  useEffect(() => {
-    if (remoteStream) {
-      if (userVideo.current) {
-        userVideo.current.srcObject = remoteStream;
-        userVideo.current.onloadedmetadata = () => {
-          userVideo.current?.play().catch((e) => console.error("Remote video play failed:", e));
-        };
-      }
-      if (remoteAudio.current) {
-        remoteAudio.current.srcObject = remoteStream;
-        remoteAudio.current.onloadedmetadata = () => {
-          remoteAudio.current?.play().catch((e) => console.error("Remote audio play failed:", e));
-        };
-      }
-      
-      const updateVideoState = () => {
-        const videoTracks = remoteStream.getVideoTracks();
-        const hasVideo = videoTracks.length > 0 && videoTracks.some(track => track.enabled && !track.muted && track.readyState === 'live');
-        setHasRemoteVideo(hasVideo);
-      };
-
-      updateVideoState();
-      remoteStream.getVideoTracks().forEach(track => {
-        track.onended = updateVideoState;
-        track.onmute = updateVideoState;
-        track.onunmute = updateVideoState;
+  const initYoutubePlayer = useCallback((videoId: string) => {
+    if (typeof window === "undefined") return;
+    const createPlayer = () => {
+      if (ytPlayerRef.current) ytPlayerRef.current.destroy();
+      ytPlayerRef.current = new (window as any).YT.Player('yt-player-watchparty', {
+        height: '100%', width: '100%', videoId: videoId,
+        playerVars: { autoplay: 1, controls: 0, modestbranding: 1, rel: 0, showinfo: 0, fs: 0, enablejsapi: 1 },
+        events: {
+          onReady: (event: any) => { setDuration(event.target.getDuration()); event.target.playVideo(); setIsPlaying(true); },
+          onStateChange: (event: any) => {
+            if (isSyncing.current) return;
+            const state = event.data;
+            if (state === (window as any).YT.PlayerState.PLAYING) {
+              setIsPlaying(true);
+              sendSyncMessage("play", { time: event.target.getCurrentTime() });
+            } else if (state === (window as any).YT.PlayerState.PAUSED) {
+              setIsPlaying(false);
+              sendSyncMessage("pause", { time: event.target.getCurrentTime() });
+            }
+          }
+        }
       });
-      remoteStream.onaddtrack = updateVideoState;
-      remoteStream.onremovetrack = updateVideoState;
-      
-      return () => {
-        remoteStream.getVideoTracks().forEach(track => {
-          track.onended = null;
-          track.onmute = null;
-          track.onunmute = null;
-        });
-        remoteStream.onaddtrack = null;
-        remoteStream.onremovetrack = null;
-      };
-    }
-  }, [remoteStream, showVideoSetup, videosExpanded]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!isConnecting) {
-        setCallDuration((prev) => prev + 1);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [isConnecting]);
-
-  const hideControlsAfterDelay = useCallback(() => {
-    if (controlsTimeout.current) {
-      clearTimeout(controlsTimeout.current);
-    }
-    controlsTimeout.current = setTimeout(() => {
-      if (!showVideoSetup && isPlaying) {
-        setControlsVisible(false);
-      }
-    }, 4000);
-  }, [showVideoSetup, isPlaying]);
-
-  const showControls = useCallback(() => {
-    setControlsVisible(true);
-    hideControlsAfterDelay();
-  }, [hideControlsAfterDelay]);
-
-  useEffect(() => {
-    if (!showVideoSetup) {
-      hideControlsAfterDelay();
-    }
-    return () => {
-      if (controlsTimeout.current) {
-        clearTimeout(controlsTimeout.current);
-      }
     };
-  }, [showVideoSetup, hideControlsAfterDelay]);
-
-  const encryptSignal = async (data: any) => {
-    if (!partnerPublicKeyRef.current) {
-      if (contact.public_key) {
-        partnerPublicKeyRef.current = await importPublicKey(contact.public_key);
-      } else {
-        return JSON.stringify(data);
-      }
-    }
-    try {
-      const encrypted = await encryptMessage(JSON.stringify(data), partnerPublicKeyRef.current);
-      return JSON.stringify({ encrypted });
-    } catch (e) {
-      console.error("Encryption failed", e);
-      return JSON.stringify(data);
-    }
-  };
-
-  const decryptSignal = async (signalStr: string) => {
-    try {
-      const parsed = JSON.parse(signalStr);
-      if (parsed.encrypted) {
-        const decrypted = await decryptMessage(parsed.encrypted, privateKey);
-        return JSON.parse(decrypted);
-      }
-      return parsed;
-    } catch (e) {
-      console.error("Decryption failed", e);
-      return JSON.parse(signalStr);
-    }
-  };
-
-  const processQueuedCandidates = async (pc: RTCPeerConnection) => {
-    while (iceCandidateQueue.current.length > 0) {
-      const candidate = iceCandidateQueue.current.shift();
-      if (candidate) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error("Failed to add queued ICE candidate:", err);
-        }
-      }
-    }
-  };
-
-  const sendSyncMessage = useCallback((action: string, data: any) => {
-    if (dataChannelRef.current && dataChannelRef.current.readyState === "open") {
-      dataChannelRef.current.send(JSON.stringify({ action, ...data }));
-    }
-  }, []);
-
-  const sendVideoFile = useCallback(async (file: File) => {
-    if (!dataChannelRef.current || dataChannelRef.current.readyState !== "open") {
-      toast.error("Connection not ready. Please wait.");
-      return;
-    }
-    
-    setSendingVideo(true);
-    setVideoSendProgress(0);
-    
-    const CHUNK_SIZE = 16384;
-    const arrayBuffer = await file.arrayBuffer();
-    const totalChunks = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
-    
-    sendSyncMessage("videoStart", { 
-      totalSize: arrayBuffer.byteLength, 
-      totalChunks, 
-      fileName: file.name,
-      fileType: file.type 
-    });
-    
-    try {
-      for (let i = 0; i < totalChunks; i++) {
-        if (!dataChannelRef.current || dataChannelRef.current.readyState !== "open") {
-          throw new Error("Connection closed");
-        }
-        
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
-        const chunk = arrayBuffer.slice(start, end);
-        
-        while (dataChannelRef.current.bufferedAmount > 1024 * 1024) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        
-        dataChannelRef.current.send(chunk);
-        setVideoSendProgress(Math.round(((i + 1) / totalChunks) * 100));
-      }
-      
-      sendSyncMessage("videoEnd", {});
-      toast.success("Video shared with partner!");
-    } catch (err) {
-      console.error("Video transfer failed:", err);
-      toast.error("Video sharing interrupted");
-    } finally {
-      setSendingVideo(false);
-    }
+    if (!(window as any).YT) {
+      const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
+      (window as any).onYouTubeIframeAPIReady = createPlayer;
+    } else if ((window as any).YT.Player) { createPlayer(); }
   }, [sendSyncMessage]);
 
   const handleDataChannelMessage = useCallback((event: MessageEvent) => {
@@ -296,47 +153,37 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
     
     try {
       const data = JSON.parse(event.data);
+      isSyncing.current = true;
       if (data.action === "videoStart") {
-        setReceivingVideo(true);
-        setTotalVideoSize(data.totalSize);
-        expectedChunksRef.current = data.totalChunks;
-        videoChunksRef.current = [];
-        receivedChunksCountRef.current = 0;
-        setVideoReceiveProgress(0);
+        setReceivingVideo(true); setTotalVideoSize(data.totalSize); expectedChunksRef.current = data.totalChunks;
+        videoChunksRef.current = []; receivedChunksCountRef.current = 0; setVideoReceiveProgress(0);
         toast.info(`Receiving video: ${data.fileName}`);
       } else if (data.action === "videoEnd") {
         const blob = new Blob(videoChunksRef.current, { type: 'video/mp4' });
-        const url = URL.createObjectURL(blob);
-        setLocalMovieUrl(url);
-        setShowVideoSetup(false);
-        setReceivingVideo(false);
-        videoChunksRef.current = [];
+        const url = URL.createObjectURL(blob); setLocalMovieUrl(url); setIsYoutube(false);
+        setShowVideoSetup(false); setReceivingVideo(false); videoChunksRef.current = [];
         toast.success("Video received! Ready to play.");
-      } else if (data.action === "play" && movieVideo.current) {
-        movieVideo.current.currentTime = data.time;
-        movieVideo.current.play().catch(e => console.error("Auto-play failed:", e));
+      } else if (data.action === "play") {
         setIsPlaying(true);
-      } else if (data.action === "pause" && movieVideo.current) {
-        movieVideo.current.currentTime = data.time;
-        movieVideo.current.pause();
+        if (isYoutube && ytPlayerRef.current) { ytPlayerRef.current.seekTo(data.time, true); ytPlayerRef.current.playVideo(); }
+        else if (movieVideo.current) { movieVideo.current.currentTime = data.time; movieVideo.current.play(); }
+      } else if (data.action === "pause") {
         setIsPlaying(false);
-      } else if (data.action === "seek" && movieVideo.current) {
-        movieVideo.current.currentTime = data.time;
+        if (isYoutube && ytPlayerRef.current) { ytPlayerRef.current.pauseVideo(); }
+        else if (movieVideo.current) { movieVideo.current.currentTime = data.time; movieVideo.current.pause(); }
+      } else if (data.action === "seek") {
+        if (isYoutube && ytPlayerRef.current) { ytPlayerRef.current.seekTo(data.time, true); }
+        else if (movieVideo.current) { movieVideo.current.currentTime = data.time; }
       } else if (data.action === "url" && data.url) {
-        setMovieUrl(data.url);
-        setShowVideoSetup(false);
+        const ytId = getYoutubeId(data.url);
+        setMovieUrl(data.url); setIsYoutube(!!ytId); setShowVideoSetup(false);
+        if (ytId) setTimeout(() => initYoutubePlayer(ytId), 500);
       } else if (data.action === "chat" && data.message) {
-        setChatMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          text: data.message,
-          sender: contact.username,
-          time: new Date()
-        }]);
+        setChatMessages(prev => [...prev, { id: Date.now().toString(), text: data.message, sender: contact.username, time: new Date() }]);
       }
-    } catch (e) {
-      console.error("Failed to parse data channel message:", e);
-    }
-  }, [contact.username]);
+      setTimeout(() => { isSyncing.current = false; }, 500);
+    } catch (e) { console.error("Data channel error:", e); }
+  }, [contact.username, initYoutubePlayer, isYoutube]);
 
   const createPeerConnection = useCallback(
     (localStream: MediaStream) => {
@@ -852,16 +699,20 @@ export function WatchParty({ contact, onClose, userId, privateKey, isInitiator =
           </div>
       ) : (
         <>
-          <video
-            ref={movieVideo}
-            src={localMovieUrl || movieUrl}
-            className="w-full h-full object-contain bg-black"
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            playsInline
-          />
+          {isYoutube ? (
+            <div id="yt-player-watchparty" className="w-full h-full bg-black" />
+          ) : (
+            <video
+              ref={movieVideo}
+              src={localMovieUrl || movieUrl}
+              className="w-full h-full object-contain bg-black"
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              playsInline
+            />
+          )}
 
           <div className="absolute top-2 sm:top-4 left-2 sm:left-4 right-2 sm:right-4 z-20">
             <motion.div className="flex items-start gap-2" initial={false}>
