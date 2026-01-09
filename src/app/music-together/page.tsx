@@ -3,22 +3,44 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { MusicTogether } from "@/components/MusicTogether";
+import { PasswordGate } from "@/components/PasswordGate";
+import { Shield, Music, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 
 export default function MusicTogetherPage() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isAppUnlocked, setIsAppUnlocked] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
+    const unlocked = sessionStorage.getItem("app_unlocked") === "true";
+    setIsAppUnlocked(unlocked);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
   }, []);
+
+  const handleAppUnlock = () => {
+    sessionStorage.setItem("app_unlocked", "true");
+    setIsAppUnlocked(true);
+  };
+
+  if (!isAppUnlocked) {
+    return (
+      <PasswordGate 
+        correctPassword="162008" 
+        onUnlock={handleAppUnlock}
+        title="Chatify"
+        subtitle="Music Terminal"
+        description="Authorization required to initialize audio stream."
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -26,7 +48,7 @@ export default function MusicTogetherPage() {
         <motion.div 
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          className="w-16 h-16 border-t-2 border-indigo-500 rounded-full"
+          className="w-16 h-16 border-t-2 border-pink-500 rounded-full"
         />
       </div>
     );
@@ -38,28 +60,34 @@ export default function MusicTogetherPage() {
   }
 
   return (
-    <main className="h-screen bg-[#010101] flex flex-col overflow-hidden">
-      <header className="h-20 border-b border-white/5 bg-[#050505]/80 backdrop-blur-3xl flex items-center justify-between px-6 z-30 shrink-0">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => router.push("/")}
-            className="text-white/40 hover:text-white"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </Button>
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-indigo-600 rounded-lg">
-                <Shield className="w-4 h-4 text-white" />
-             </div>
-             <h1 className="text-lg font-black italic tracking-tighter uppercase">Chatify <span className="text-indigo-500">Music</span></h1>
+    <main className="min-h-screen bg-[#010101] text-white p-4 md:p-8 flex flex-col items-center">
+      <div className="w-full max-w-5xl flex items-center justify-between mb-8">
+        <Button 
+          variant="ghost" 
+          onClick={() => router.push("/")}
+          className="text-white/40 hover:text-white"
+        >
+          <ChevronLeft className="w-5 h-5 mr-2" />
+          Back to Dashboard
+        </Button>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-pink-600/20 rounded-xl">
+            <Music className="w-5 h-5 text-pink-500" />
           </div>
+          <h1 className="text-xl font-black uppercase italic tracking-tighter">Music <span className="text-pink-500">Together</span></h1>
         </div>
-      </header>
+        <div className="w-24 hidden md:block" />
+      </div>
 
-      <div className="flex-1">
+      <div className="w-full max-w-4xl aspect-video md:aspect-[21/9] min-h-[600px]">
         <MusicTogether />
+      </div>
+
+      <div className="mt-8 text-center">
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/10 flex items-center gap-3 justify-center">
+          <Shield className="w-3 h-3" />
+          Secure Neural Audio Stream v2.0
+        </p>
       </div>
     </main>
   );

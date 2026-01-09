@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactPlayer from "react-player";
 import {
   Play,
   Pause,
@@ -9,8 +10,6 @@ import {
   VolumeX,
   Maximize2,
   Minimize2,
-  SkipBack,
-  SkipForward,
   Upload,
   Link,
   Film,
@@ -40,7 +39,7 @@ export function Cinema({ onClose }: CinemaProps) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [playbackRate, setPlaybackRate] = useState(1);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<ReactPlayer>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -90,48 +89,29 @@ export function Cinema({ onClose }: CinemaProps) {
   };
 
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
+    setIsPlaying(!isPlaying);
   };
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-    }
+  const handleProgress = (state: { playedSeconds: number }) => {
+    setCurrentTime(state.playedSeconds);
   };
 
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-    }
+  const handleDuration = (d: number) => {
+    setDuration(d);
   };
 
   const handleSeek = (value: number[]) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = value[0];
-      setCurrentTime(value[0]);
-    }
+    playerRef.current?.seekTo(value[0]);
+    setCurrentTime(value[0]);
   };
 
   const handleVolumeChange = (value: number[]) => {
-    if (videoRef.current) {
-      videoRef.current.volume = value[0];
-      setVolume(value[0]);
-      setIsMuted(value[0] === 0);
-    }
+    setVolume(value[0]);
+    setIsMuted(value[0] === 0);
   };
 
   const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
+    setIsMuted(!isMuted);
   };
 
   const toggleFullscreen = () => {
@@ -146,9 +126,8 @@ export function Cinema({ onClose }: CinemaProps) {
   };
 
   const skip = (seconds: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime += seconds;
-    }
+    const newTime = currentTime + seconds;
+    playerRef.current?.seekTo(newTime);
   };
 
   const changePlaybackRate = () => {
@@ -157,9 +136,6 @@ export function Cinema({ onClose }: CinemaProps) {
     const nextIndex = (currentIndex + 1) % rates.length;
     const newRate = rates[nextIndex];
     setPlaybackRate(newRate);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = newRate;
-    }
   };
 
   const formatTime = (time: number) => {
@@ -247,7 +223,7 @@ export function Cinema({ onClose }: CinemaProps) {
                   <Input
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="Paste video URL here..."
+                    placeholder="Paste YouTube or video URL..."
                     className="h-14 bg-white/5 border-white/10 rounded-xl text-white placeholder:text-white/30"
                     onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
                   />
@@ -262,7 +238,7 @@ export function Cinema({ onClose }: CinemaProps) {
                 </div>
 
                 <p className="text-[10px] text-white/20 text-center uppercase tracking-wider">
-                  Supports MP4, WebM, MOV and direct video URLs
+                  Supports YouTube, SoundCloud, MP4, WebM and more
                 </p>
               </div>
             </div>
@@ -274,21 +250,40 @@ export function Cinema({ onClose }: CinemaProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             ref={containerRef}
-            className="flex-1 relative bg-black flex flex-col"
+            className="flex-1 relative bg-black flex flex-col overflow-hidden"
             onMouseMove={showControls}
             onClick={() => !controlsVisible && showControls()}
           >
-            <video
-              ref={videoRef}
-              src={videoSource}
-              className="flex-1 w-full object-contain bg-black"
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={() => setIsPlaying(false)}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onClick={togglePlay}
-            />
+            <div className="flex-1 relative bg-black">
+              <ReactPlayer
+                ref={playerRef}
+                url={videoSource}
+                width="100%"
+                height="100%"
+                playing={isPlaying}
+                volume={volume}
+                muted={isMuted}
+                playbackRate={playbackRate}
+                onProgress={handleProgress}
+                onDuration={handleDuration}
+                onEnded={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                style={{ position: "absolute", top: 0, left: 0 }}
+                config={{
+                  youtube: {
+                    playerVars: { showinfo: 0, modestbranding: 1 }
+                  }
+                }}
+              />
+              <div 
+                className="absolute inset-0 z-10" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlay();
+                }}
+              />
+            </div>
 
             <AnimatePresence>
               {controlsVisible && (
@@ -296,7 +291,7 @@ export function Cinema({ onClose }: CinemaProps) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-0 flex flex-col justify-between pointer-events-none"
+                  className="absolute inset-0 flex flex-col justify-between pointer-events-none z-20"
                 >
                   <div className="p-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
                     <div className="flex items-center justify-between">
@@ -311,7 +306,7 @@ export function Cinema({ onClose }: CinemaProps) {
                         </Button>
                         <div className="truncate max-w-[200px] sm:max-w-md">
                           <p className="text-sm font-bold truncate">
-                            {localFile?.name || "Video Stream"}
+                            {localFile?.name || (ReactPlayer.canPlay(videoSource) ? "Streaming Content" : "Video Stream")}
                           </p>
                         </div>
                       </div>
